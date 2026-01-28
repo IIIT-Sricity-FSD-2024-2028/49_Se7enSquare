@@ -1,4 +1,21 @@
-# 49_Se7enSquare
-Gaming Community Engagement and Moderation Platform
+# TeamName: 49_Se7enSquare
 
-Edit
+# Domain:  Gaming Platforms and Interactive Service
+
+# Problem Statement:
+Player Community, Moderation & Engagement Platform
+Modern gaming communities require more than basic communication tools.  
+This project aims to design a platform that enables community building, structured moderation, and healthy engagement for gamers, audiences, and content creators while ensuring safety, scalability, and clarity of roles.
+
+# Actors
+ Gamer – Actively participates in discussions and community interactions  
+ Audience – Observes or passively engages with creators or communities  
+ Channel Moderator – Enforces rules and handles reports at channel level  
+ Channel Administrator – Manages channels, roles, and final decisions 
+
+ # Contributors:
+ Sanidhya Joshi
+ Karmanya Belsare
+ Awadhesh
+ Anant Garg
+ Rajat Jain
