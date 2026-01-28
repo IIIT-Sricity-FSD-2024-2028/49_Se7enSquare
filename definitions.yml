@@ -1,0 +1,106 @@
+# Domain: Gaming Platforms and Interactive Entertainment
+# Problem Statement: Player Community, Moderation and Engagement Platform
+# Last Updated: 2026-01-28
+
+DomainTerm1: Gamer
+definition:
+  An individual who participates in gaming communities to interact,
+  communicate, and engage with other gamers or creators on the platform.
+examples:
+  - A gamer chatting in a community channel.
+  - A gamer joining a server to discuss a multiplayer game.
+aliases:
+  - Player
+  - Member
+
+  DomainTerm2: Audience
+definition:
+  Individuals who follow or observe a content creator or community primarily
+  for viewing, listening, or passive participation, with limited or optional
+  interaction compared to active gamers.
+examples:
+  - Viewers watching a creator’s updates or announcements.
+  - Audience members reacting or commenting during community events.
+aliases:
+  - Viewers
+  - Spectators
+
+  DomainTerm3: Community
+definition:
+  A collective of gamers and audience members organized around shared
+  interests, games, or creators to enable structured interaction.
+examples:
+  - A community built around a popular game.
+  - A creator-led fan community.
+aliases:
+  - Group
+  - Guild
+
+
+DomainTerm4: Channel
+definition:
+  A dedicated communication space within a community used for discussions,
+  announcements, or specific activities.
+examples:
+  - A channel for gameplay discussion.
+  - A channel used for community announcements.
+aliases:
+  - Room
+  - Section
+
+DomainTerm5: Channel Moderator
+definition:
+  A trusted member responsible for monitoring channels, enforcing rules,
+  and taking moderation actions to maintain healthy interactions.
+examples:
+  - A channel moderator muting a gamer for spamming.
+  - A channel moderator deleting offensive messages.
+aliases:
+  - Moderator
+  - Mod
+
+
+DomainTerm6: Channel Administrator
+definition:
+  The authority responsible for managing channels, assigning moderation
+  roles, and making final decisions on serious violations.
+examples:
+  - A channel administrator permanently banning a gamer.
+  - A channel administrator updating channel rules.
+aliases:
+  - Admin
+  - Channel Owner
+
+  DomainTerm7: Moderation Action
+definition:
+  An action taken to enforce community guidelines and ensure respectful
+  behavior within channels and communities.
+examples:
+  - Issuing a warning for inappropriate language.
+  - Temporarily banning a gamer from a channel.
+aliases:
+  - Warning
+  - Restriction
+
+
+DomainTerm8: Report
+definition:
+  A request raised by a gamer or audience member to flag inappropriate
+  behavior or content for review.
+examples:
+  - Reporting harassment in a channel.
+  - Flagging offensive content posted by a gamer.
+aliases:
+  - Complaint
+  - Flag
+
+
+DomainTerm9: Appeal
+definition:
+  A request submitted to review or reconsider a moderation action
+  taken against a gamer.
+examples:
+  - Appealing a temporary mute.
+  - Requesting review of a ban decision.
+aliases:
+  - Review Request
