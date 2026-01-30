@@ -13,9 +13,9 @@ This project aims to design a platform that enables community building, structur
  Channel Moderator – Enforces rules and handles reports at channel level  
  Channel Administrator – Manages channels, roles, and final decisions 
 
- # Contributors:
- Sanidhya Joshi
- Karmanya Belsare
- Awadhesh
- Anant Garg
- Rajat Jain
+ # Collaborators:
+ - Sanidhya Joshi
+ - Karmanya Belsare
+ - Awadhesh
+ - Anant Garg
+ - Rajat Jain
