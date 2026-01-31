@@ -12,13 +12,17 @@ This project aims to design a platform that enables community building, structur
 - Real-time interaction and engagement.
 - Content reporting and appeals.
 - Role-based moderation and administration.
-- Structured governance and rule enforcement
+- Structured governance and rule enforcement.
   
 # Actors
- Gamer – Actively participates in discussions and community interactions  
- Audience – Observes or passively engages with creators or communities  
- Channel Moderator – Enforces rules and handles reports at the channel level  
- Channel Administrator – Manages channels, roles, and final decisions 
+Guest User – Can browse public communities, channels, and events with read-only access.
+Audience – Observes community activities, registers for events, and can report inappropriate content.
+Gamer – Actively participates in communities by joining channels, posting messages, interacting with others, and attending events.
+Community Manager – Manages communities by creating channels, assigning roles, monitoring engagement, and handling community-level reports.
+System Moderator – Reviews reports across communities, resolves escalated cases, and enforces platform-wide moderation policies.
+System Administrator – Oversees the entire platform, manages moderation rules, and analyzes system metrics.
+System Bot (Automated Actor) – Automatically filters and flags inappropriate content, logs activities, and sends system notifications.
+Technical Support – Handles system maintenance, monitors errors, and resolves technical issues.
 
  # Collaborators:
  - Sanidhya Joshi
