@@ -1,4 +1,4 @@
-# Gaming Platform Interaction Summary
+# Summary of the interaction
 
 ## Basic Information
 
