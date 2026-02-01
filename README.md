@@ -25,51 +25,51 @@ This project aims to design a platform that enables community building, structur
 - Technical Support – Handles system maintenance, monitors errors, and resolves technical issues.
 
 # Actor-wise Core Features
-# Guest User
+## Guest User
 - View public communities and channels.
 - Read posts, events, and announcements.
 - Explore the platform without signing up.
 
-# Audience
+## Audience
 - Watch community discussions.
 - Register and attend events.
 - Report inappropriate content.
 - Get notifications from followed communities.
 
-# Gamer
+## Gamer
 - Join or leave communities and channels.
 - Send messages and share media.
 - Chat in real time and join events.
 - Interact with other gamers.
 - Follow community rules.
 
-# Community Manager
+## Community Manager
 - Create and manage communities and channels.
 - Assign roles to users.
 - Monitor community activity.
 - Handle reports within the community.
 - Enforce community rules.
 
-# System Moderator
+## System Moderator
 - Review reported content from all communities.
 - Handle serious or escalated issues.
 - Warn users, remove content, or ban accounts.
 - Apply platform-wide rules.
 
-# System Administrator
+## System Administrator
 - Manage overall platform rules.
 - Set moderation policies.
 - Monitor system performance and data.
 - Manage user roles and permissions.
 - Ensure platform stability.
 
-# System Bot
+## System Bot
 - Automatically detect and flag bad content.
 - Log user and system activities.
 - Send alerts and notifications.
 - Help moderators with automation.
 
-# Technical Support
+## Technical Support
 - Monitor system health.
 - Fix technical issues.
 - Perform maintenance and updates.
