@@ -9,7 +9,7 @@
 | **Date of Interaction** | January 28, 2026 |
 | **Mode of Interaction** | Video Call |
 | **Duration** | 50 minutes |
-| **Video Link** | [Google Drive](https://drive.google.com/file/d/1Y-qK29WDP5bMhmsSb_JiKkSUtBH-cx6J/view?usp=sharing) |
+| **Video Link** | [Domain Expert Interaction](https://drive.google.com/file/d/1Y-qK29WDP5bMhmsSb_JiKkSUtBH-cx6J/view?usp=sharing) |
 
 ---
 
@@ -42,8 +42,8 @@ The primary goals of this problem statement are to foster healthy player communi
 | **Audience** | Users who primarily observe or follow community or creator activities with limited interaction, mainly consuming content such as updates, streams, or events |
 | **Community** | A structured group of gamers and audience members organized around shared games, interests, or creators to enable social interaction and engagement |
 | **Channel** | A dedicated communication space within a community used for focused discussions, announcements, or specific activities |
-| **Channel Moderator** | A trusted user responsible for monitoring channels, enforcing rules, and taking moderation actions to maintain healthy interactions |
-| **Channel Administrator** | An authority responsible for managing channels, assigning moderation roles, and making final decisions on serious violations |
+| **System Moderator** | A platform-level authority responsible for overseeing multiple communities, handling cross-channel disputes, monitoring platform-wide metrics, and supervising Community Managers |
+| **System Administrator** | The highest-level technical authority responsible for platform infrastructure, system-wide configurations, automated moderation setup, and ultimate administrative oversight |
 | **Moderation Action** | An enforcement step taken to uphold community guidelines, such as warnings, mutes, or bans, to ensure respectful behavior |
 | **Report** | A request raised by a user to flag inappropriate behavior or content for review by moderators or administrators |
 | **Appeal** | A formal request to review or reconsider a moderation action taken against a user |
@@ -57,9 +57,10 @@ The primary goals of this problem statement are to foster healthy player communi
 | **Guest User** | Browse public channels in read-only mode, view public announcements and events, discover communities before registration |
 | **Audience** | Browse and join community channels, view chats and streams, register for events, react to messages where permitted, report inappropriate content |
 | **Gamer** | Participate in text and voice discussions, join gameplay sessions, create and participate in events or streams, share content, report policy violations |
-| **Community Manager** | Create and manage official channels, organize community events, monitor engagement trends, define and update community guidelines, coordinate with moderators |
-| **System Moderator** | Review reported content and users, moderate discussions (mute, timeout, delete messages), monitor activity across channels, enforce rules, escalate severe cases |
-| **System Admin** | Configure system-wide policies and settings, manage channels and system configurations, handle escalated disputes and appeals, issue permanent bans, analyze platform metrics |
+| **Channel Manager** | Moderate discussions (mute, timeout, delete messages), review reported content, enforce channel-specific rules, issue warnings and temporary sanctions, monitor channel activity |
+| **Community Manager** | Oversees multiple channels or a channel group: analyzes engagement metrics, creates channel guidelines, handles escalated issues from Channel Managers, coordinates cross-channel events |
+| **System Moderator** | Supervise Community Managers, handle cross-community disputes, review escalated ban appeals, monitor platform-wide moderation metrics, develop moderation policies, conduct moderator training |
+| **System Administrator** | Configure system-wide policies and settings, manage channels and system configurations, handle escalated disputes and appeals, issue permanent bans, analyze platform metrics |
 | **System Bot (Automated)** | Auto-filter prohibited content, detect and flag suspicious activity, remove spam automatically, assist moderation, assign automated roles, support engagement features |
 | **Technical Support** | Troubleshoot platform and service issues, resolve communication or event-related failures, monitor system health, support uptime and reliability |
 
@@ -104,9 +105,10 @@ Inappropriate content is reported or detected.
 
 **Steps Involved:**
 1. Audience or Gamer reports inappropriate content
-2. System Bot flags suspicious activity
-3. Community Manager reviews reported content
-4. System Moderator handles escalated cases
+2. System Bot flags suspicious activity or Channel Manager reviews report
+3. Channel Manager takes initial action (warning, temp mute)
+4. Community Manager reviews escalated cases
+5. System Moderator handles platform-wide or severe cases
 
 **Outcome/End Condition:**  
 Community guidelines are enforced and violations are addressed.
@@ -136,7 +138,8 @@ A message or activity occurs in a community channel.
 **Steps Involved:**
 1. System Bot monitors messages in real time
 2. Bot auto-filters spam or prohibited content
-3. Clean content is allowed or flagged for review
+3. Flagged content is queued for human moderator review
+4. Clean content is allowed; violating content is removed with notification
 
 **Outcome/End Condition:**  
 Safe and moderated communication environment.
@@ -202,8 +205,8 @@ It was initially assumed that adding more features would automatically improve c
 ### Open Questions for Follow-up
 
 There are still open questions regarding how to effectively manage large-scale communities. These include:
-- How to support multiple languages efficiently
-- How much automation should be used in moderation
-- How to track user behavior and engagement in real time without affecting performance
+1. What is the optimal ratio of human moderators to users for effective community management?
+2. How can cultural context be better incorporated into automated moderation systems?
+3. What metrics best indicate "community health" beyond just engagement numbers?
 
 ---
