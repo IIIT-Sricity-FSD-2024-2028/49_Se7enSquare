@@ -1,6 +1,6 @@
 # Domain: Gaming Platforms and Interactive Service
 # Problem Statement: Player Community, Moderation and Engagement Platform
-# Last Updated: 2026-01-28
+# Last Updated: 2026-02-01
 
 DomainTerm1: Gamer
 definition:
@@ -13,7 +13,7 @@ aliases:
   - Player
   - Member
 
-  DomainTerm2: Audience
+DomainTerm2: Audience
 definition:
   Individuals who follow or observe a content creator or community primarily
   for viewing, listening, or passive participation, with limited or optional
@@ -25,7 +25,7 @@ aliases:
   - Viewers
   - Spectators
 
-  DomainTerm3: Community
+DomainTerm3: Community
 definition:
   A collective of gamers and audience members organized around shared
   interests, games, or creators to enable structured interaction.
@@ -35,7 +35,6 @@ examples:
 aliases:
   - Group
   - Guild
-
 
 DomainTerm4: Channel
 definition:
@@ -48,30 +47,50 @@ aliases:
   - Room
   - Section
 
-DomainTerm5: Channel Moderator
+DomainTerm5: Channel Manager
 definition:
-  A trusted member responsible for monitoring channels, enforcing rules,
-  and taking moderation actions to maintain healthy interactions.
+  A dual-role authority responsible for both daily operational
+  moderation and administrative functions of a single channel,
+  including rule enforcement, content management, user sanctions,
+  and channel configuration.
 examples:
-  - A channel moderator muting a gamer for spamming.
-  - A channel moderator deleting offensive messages.
+  - A channel manager muting a gamer for spamming and later reviewing their appeal.
+  - A channel manager deleting offensive messages while also updating channel permissions.
+  - A channel manager creating sub-channels and assigning temporary moderators.
 aliases:
-  - Moderator
-  - Mod
+  - Channel Lead
+  - Channel Admin
+  - Channel Mod
 
-
-DomainTerm6: Channel Administrator
+DomainTerm6: Community Manager
 definition:
-  The authority responsible for managing channels, assigning moderation
-  roles, and making final decisions on serious violations.
+  A strategic role responsible for overseeing a group of related
+  channels, analyzing community health metrics, creating official
+  channels, and handling escalated issues from Channel Managers.
 examples:
-  - A channel administrator permanently banning a gamer.
-  - A channel administrator updating channel rules.
+  - A community manager analyzing engagement metrics across multiple game channels.
+  - A community manager creating an official tournament channel and setting its guidelines.
+  - A community manager handling a dispute that escalated from a channel manager.
 aliases:
-  - Admin
-  - Channel Owner
+  - Community Lead
+  - Senior Moderator
+  - Group Manager
 
-  DomainTerm7: Moderation Action
+DomainTerm7: System Moderator
+definition:
+  A platform-level authority responsible for overseeing multiple
+  communities, handling cross-channel disputes, monitoring
+  platform-wide metrics, and supervising Community Managers.
+examples:
+  - A system moderator reviewing a user's behavior across different gaming communities.
+  - A system moderator developing platform-wide moderation policies.
+  - A system moderator conducting training for community managers.
+aliases:
+  - Platform Moderator
+  - Global Moderator
+  - Senior Community Manager
+
+DomainTerm8: Moderation Action
 definition:
   An action taken to enforce community guidelines and ensure respectful
   behavior within channels and communities.
@@ -82,8 +101,7 @@ aliases:
   - Warning
   - Restriction
 
-
-DomainTerm8: Report
+DomainTerm9: Report
 definition:
   A request raised by a gamer or audience member to flag inappropriate
   behavior or content for review.
@@ -94,8 +112,7 @@ aliases:
   - Complaint
   - Flag
 
-
-DomainTerm9: Appeal
+DomainTerm10: Appeal
 definition:
   A request submitted to review or reconsider a moderation action
   taken against a gamer.
@@ -104,3 +121,115 @@ examples:
   - Requesting review of a ban decision.
 aliases:
   - Review Request
+
+DomainTerm11: Guest User
+definition:
+  An unregistered or unauthenticated user who can browse public
+  communities and channels in read-only mode before joining or registering.
+examples:
+  - A guest user viewing public community announcements.
+  - A guest user browsing channels before creating an account.
+aliases:
+  - Visitor
+  - Anonymous User
+
+DomainTerm12: System Administrator
+definition:
+  The highest-level technical authority responsible for platform-wide
+  configuration, infrastructure management, automated moderation setup,
+  and final decision-making on escalated cases.
+examples:
+  - A system administrator configuring global moderation policies.
+  - A system administrator issuing a permanent platform-wide ban.
+aliases:
+  - Platform Admin
+  - Super Administrator
+
+DomainTerm13: System Bot
+definition:
+  An automated system component responsible for monitoring content,
+  detecting policy violations, filtering spam, and assisting human moderators
+  in real time.
+examples:
+  - A system bot auto-filtering toxic language.
+  - A system bot flagging suspicious user behavior.
+aliases:
+  - Moderation Bot
+  - Automation Agent
+
+DomainTerm14: Community Event
+definition:
+  A scheduled or live activity hosted within a community to encourage
+  interaction, engagement, and participation among gamers and audience members.
+examples:
+  - A community-hosted multiplayer tournament.
+  - A live Q&A session with a creator.
+aliases:
+  - Event
+  - Live Session
+
+DomainTerm15: Community Guidelines
+definition:
+  A defined set of rules and behavioral standards that govern acceptable
+  conduct within communities and channels.
+examples:
+  - Guidelines prohibiting harassment and hate speech.
+  - Rules defining acceptable language usage.
+aliases:
+  - Code of Conduct
+  - Community Rules
+
+DomainTerm16: Engagement Metric
+definition:
+  A measurable indicator used to assess user participation, interaction
+  levels, and overall community health.
+examples:
+  - Daily active users in a community.
+  - Message frequency per channel.
+aliases:
+  - Engagement KPI
+  - Activity Metric
+
+DomainTerm17: Sanction
+definition:
+  A penalty imposed on a user for violating community guidelines, ranging
+  from temporary restrictions to permanent removal.
+examples:
+  - Temporarily muting a gamer for spamming.
+  - Permanently banning a repeat offender.
+aliases:
+  - Penalty
+  - Punishment
+
+DomainTerm18: Escalation
+definition:
+  The process of forwarding a moderation issue to a higher authority
+  when it exceeds the decision-making scope of the current role.
+examples:
+  - A channel manager escalating a severe harassment case.
+  - A community manager forwarding a case to a system moderator.
+aliases:
+  - Case Escalation
+  - Issue Handoff
+
+DomainTerm19: Audit Log
+definition:
+  A secure record that stores all moderation actions, reports, and
+  administrative decisions for transparency and accountability.
+examples:
+  - Reviewing logs of deleted messages.
+  - Auditing ban history during an appeal review.
+aliases:
+  - Activity Log
+  - Moderation Log
+
+DomainTerm20: Community Health
+definition:
+  An overall assessment of a community’s quality based on engagement,
+  behavioral trends, report frequency, and user retention.
+examples:
+  - Evaluating toxicity levels in a gaming community.
+  - Measuring retention after moderation changes.
+aliases:
+  - Community Well-being
+  - Platform Health
