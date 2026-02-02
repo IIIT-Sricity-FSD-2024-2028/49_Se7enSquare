@@ -19,7 +19,7 @@
 Senior Product Manager / Product Leader (Consumer Digital Products)
 
 **Experience in the Domain:**  
-10+ years of experience leading consumer-facing digital products across gaming and digital entertainment. Responsible for end-to-end product lifecycle management including product strategy, roadmapping, go-to-market launches, live operations, monetization, analytics, and P&L ownership. Scaled products to 215M+ organic downloads, achieved top global app store rankings, and delivered consistent ~30% YoY growth through data-driven optimization and cross-functional execution.
+10+ years of experience leading consumer-facing digital products across gaming and digital entertainment. Responsible for end-to-end product lifecycle management, including product strategy, roadmapping, go-to-market launches, live operations, monetization, analytics, and P&L ownership. Scaled products to 215M+ organic downloads, achieved top global app store rankings, and delivered consistent ~30% YoY growth through data-driven optimization and cross-functional execution.
 
 **Nature of Work:**  
 Managerial
@@ -29,7 +29,7 @@ Managerial
 ## Domain Context and Terminology
 
 ### Overview
-The overall purpose of this problem statement in daily work is to create a scalable, safe, and engaging player community for a better gaming experience. It focuses on enabling real-time player interaction and meaningful engagement without disturbing gameplay. From a product perspective, it helps balance community growth with safety and quality by reducing toxic behavior, managing linguistic diversity, and increasing retention through social features. Ultimately, the goal is to enhance player trust and long-term engagement.
+The overall purpose of this problem statement in daily work is to create a scalable, safe, and engaging player community for a better gaming experience. It focuses on enabling real-time player interaction and meaningful engagement without disturbing gameplay. From a product perspective, it helps balance community growth with safety and quality by reducing toxic behaviour, managing linguistic diversity, and increasing retention through social features. Ultimately, the goal is to enhance player trust and long-term engagement.
 
 ### Primary Goals
 The primary goals of this problem statement are to foster healthy player communities, ensure safe and effective moderation at scale, and increase player engagement without interrupting gameplay. From a business and product standpoint, the desired outcomes include higher player retention, stronger community trust, and sustainable growth driven by social engagement.
@@ -54,16 +54,12 @@ The primary goals of this problem statement are to foster healthy player communi
 
 | Actor/Role | Responsibilities |
 |---|---|
-| **Guest User** | Browse public channels in read-only mode, view public announcements and events, discover communities before registration |
 | **Audience** | Browse and join community channels, view chats and streams, register for events, react to messages where permitted, report inappropriate content |
 | **Gamer** | Participate in text and voice discussions, join gameplay sessions, create and participate in events or streams, share content, report policy violations |
-| **Channel Manager** | Moderate discussions (mute, timeout, delete messages), review reported content, enforce channel-specific rules, issue warnings and temporary sanctions, monitor channel activity |
-| **Community Manager** | Oversees multiple channels or a channel group: analyzes engagement metrics, creates channel guidelines, handles escalated issues from Channel Managers, coordinates cross-channel events |
+| **Community Manager** | Oversees multiple channels or a channel group: analyzes engagement metrics, creates channel guidelines, handles escalated issues and coordinates cross-channel events |
 | **System Moderator** | Supervise Community Managers, handle cross-community disputes, review escalated ban appeals, monitor platform-wide moderation metrics, develop moderation policies, conduct moderator training |
 | **System Administrator** | Configure system-wide policies and settings, manage channels and system configurations, handle escalated disputes and appeals, issue permanent bans, analyze platform metrics |
 | **System Bot (Automated)** | Auto-filter prohibited content, detect and flag suspicious activity, remove spam automatically, assist moderation, assign automated roles, support engagement features |
-| **Technical Support** | Troubleshoot platform and service issues, resolve communication or event-related failures, monitor system health, support uptime and reliability |
-
 ---
 
 ## Core Workflows
@@ -105,13 +101,13 @@ Inappropriate content is reported or detected.
 
 **Steps Involved:**
 1. Audience or Gamer reports inappropriate content
-2. System Bot flags suspicious activity or Channel Manager reviews report
-3. Channel Manager takes initial action (warning, temp mute)
+2. System Bot flags suspicious activity, or a moderator reviews the report
+3. Moderator takes initial action (warning, temp mute)
 4. Community Manager reviews escalated cases
 5. System Moderator handles platform-wide or severe cases
 
 **Outcome/End Condition:**  
-Community guidelines are enforced and violations are addressed.
+Community guidelines are enforced, and violations are addressed.
 
 ---
 
