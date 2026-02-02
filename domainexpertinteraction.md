@@ -85,9 +85,9 @@ User becomes an active participant within a community.
 A Gamer decides to host a community event.
 
 **Steps Involved:**
-1. Gamer declares or schedules a community event
+1. Community Manager declares or schedules a community event
 2. Audience and Gamers register for the event
-3. Gamer hosts or broadcasts the event
+3. Community Manager hosts or broadcasts the event
 
 **Outcome/End Condition:**  
 Community event is successfully conducted with participant engagement.
@@ -103,8 +103,7 @@ Inappropriate content is reported or detected.
 1. Audience or Gamer reports inappropriate content
 2. System Bot flags suspicious activity, or a moderator reviews the report
 3. Moderator takes initial action (warning, temp mute)
-4. Community Manager reviews escalated cases
-5. System Moderator handles platform-wide or severe cases
+4. System Moderator handles platform-wide or severe cases
 
 **Outcome/End Condition:**  
 Community guidelines are enforced, and violations are addressed.
@@ -117,9 +116,8 @@ Community guidelines are enforced, and violations are addressed.
 Repeated or severe policy violations occur.
 
 **Steps Involved:**
-1. Community Manager applies temporary sanctions
-2. System Moderator reviews user history
-3. System Admin adjudicates escalated appeals
+1. System Moderator reviews user history and applies temporary sanctions
+2. System Admin adjudicates escalated appeals
 
 **Outcome/End Condition:**  
 Final resolution of violations with corrective action.
@@ -162,7 +160,7 @@ Safe and moderated communication environment.
 
 - **The "Sarcasm" Dilemma:** AI or Bots might flag a message as "Toxic" when it is actually friendly banter between friends. This requires a human Moderator to override the system.
 - **Appeals Process:** If a Gamer is banned, they may fall into an "exception flow" where they can submit an appeal, requiring the Admin to re-open a closed case.
-- **Cross-Regional Latency:** When a Gamer and a Creator are in different geographical regions, the "Interactive Service" (like a live vote) might have a delay, causing out-of-sync results.
+- **Cross-Regional Latency:** When two or more Gamers are in different geographical regions, the "Interactive Service" (like a live vote) might have a delay, causing out-of-sync results.
 
 ### Situations Where Things Usually Go Wrong
 
