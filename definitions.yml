@@ -1,6 +1,6 @@
 # Domain: Gaming Platforms and Interactive Service
 # Problem Statement: Player Community, Moderation and Engagement Platform
-# Last Updated: 2026-02-01
+# Last Updated: 2026-02-03
 
 DomainTerm1: Gamer
 definition:
@@ -11,7 +11,16 @@ examples:
   - A gamer joining a server to discuss a multiplayer game.
 aliases:
   - Player
-  - Member
+  - MemberDomainTerm5: Role
+definition:
+  A predefined set of permissions and responsibilities assigned to a user
+  within a community or channel.
+examples:
+  - Assigning a moderator role to a gamer.
+  - Granting read-only access to an audience member.
+aliases:
+  - User Role
+  - 
 
 DomainTerm2: Audience
 definition:
@@ -47,30 +56,25 @@ aliases:
   - Room
   - Section
 
-DomainTerm5: Channel Manager
+DomainTerm5: Role
 definition:
-  A dual-role authority responsible for both daily operational
-  moderation and administrative functions of a single channel,
-  including rule enforcement, content management, user sanctions,
-  and channel configuration.
+  A predefined set of permissions and responsibilities assigned to a user
+  within a community or channel.
 examples:
-  - A channel manager muting a gamer for spamming and later reviewing their appeal.
-  - A channel manager deleting offensive messages while also updating channel permissions.
-  - A channel manager creating sub-channels and assigning temporary moderators.
+  - Assigning a moderator role to a gamer.
+  - Granting read-only access to an audience member.
 aliases:
-  - Channel Lead
-  - Channel Admin
-  - Channel Mod
+  - User Role
+  - Permission Set
 
 DomainTerm6: Community Manager
 definition:
   A strategic role responsible for overseeing a group of related
   channels, analyzing community health metrics, creating official
-  channels, and handling escalated issues from Channel Managers.
+  channels.
 examples:
   - A community manager analyzing engagement metrics across multiple game channels.
   - A community manager creating an official tournament channel and setting its guidelines.
-  - A community manager handling a dispute that escalated from a channel manager.
 aliases:
   - Community Lead
   - Senior Moderator
@@ -126,7 +130,16 @@ DomainTerm11: Guest User
 definition:
   An unregistered or unauthenticated user who can browse public
   communities and channels in read-only mode before joining or registering.
+examples:DomainTerm5: Role
+definition:
+  A predefined set of permissions and responsibilities assigned to a user
+  within a community or channel.
 examples:
+  - Assigning a moderator role to a gamer.
+  - Granting read-only access to an audience member.
+aliases:
+  - User Role
+  - 
   - A guest user viewing public community announcements.
   - A guest user browsing channels before creating an account.
 aliases:
@@ -206,8 +219,8 @@ definition:
   The process of forwarding a moderation issue to a higher authority
   when it exceeds the decision-making scope of the current role.
 examples:
-  - A channel manager escalating a severe harassment case.
-  - A community manager forwarding a case to a system moderator.
+  - A system moderator escalating a severe harassment case.
+  - A moderator forwarding a case to a system administrator.
 aliases:
   - Case Escalation
   - Issue Handoff
@@ -233,3 +246,5 @@ examples:
 aliases:
   - Community Well-being
   - Platform Health
+
+  
