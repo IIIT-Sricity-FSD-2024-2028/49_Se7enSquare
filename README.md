@@ -15,20 +15,14 @@ This project aims to design a platform that enables community building, structur
 - Structured governance and rule enforcement.
   
 # Actors
-- Guest User – Can browse public communities, channels, and events with read-only access.
 - Audience – Observes community activities, registers for events, and can report inappropriate content.
 - Gamer – Actively participates in communities by joining channels, posting messages, interacting with others, and attending events.
 - Community Manager – Manages communities by creating channels, assigning roles, monitoring engagement, and handling community-level reports.
 - System Moderator – Reviews reports across communities, resolves escalated cases, and enforces platform-wide moderation policies.
 - System Administrator – Oversees the entire platform, manages moderation rules, and analyzes system metrics.
 - System Bot (Automated Actor) – Automatically filters and flags inappropriate content, logs activities, and sends system notifications.
-- Technical Support – Handles system maintenance, monitors errors, and resolves technical issues.
 
 # Actor-wise Core Features
-## Guest User
-- View public communities and channels.
-- Read posts, events, and announcements.
-- Explore the platform without signing up.
 
 ## Audience
 - Watch community discussions.
@@ -68,12 +62,6 @@ This project aims to design a platform that enables community building, structur
 - Log user and system activities.
 - Send alerts and notifications.
 - Help moderators with automation.
-
-## Technical Support
-- Monitor system health.
-- Fix technical issues.
-- Perform maintenance and updates.
-- Help users with technical problems.
 
  # Collaborators:
  - Sanidhya Joshi
