@@ -11,16 +11,7 @@ examples:
   - A gamer joining a server to discuss a multiplayer game.
 aliases:
   - Player
-  - MemberDomainTerm5: Role
-definition:
-  A predefined set of permissions and responsibilities assigned to a user
-  within a community or channel.
-examples:
-  - Assigning a moderator role to a gamer.
-  - Granting read-only access to an audience member.
-aliases:
-  - User Role
-  - 
+  - Member
 
 DomainTerm2: Audience
 definition:
@@ -83,8 +74,7 @@ aliases:
 DomainTerm7: System Moderator
 definition:
   A platform-level authority responsible for overseeing multiple
-  communities, handling cross-channel disputes, monitoring
-  platform-wide metrics, and supervising Community Managers.
+  communities, handling cross-channel disputes, and supervising Community Managers.
 examples:
   - A system moderator reviewing a user's behavior across different gaming communities.
   - A system moderator developing platform-wide moderation policies.
@@ -130,16 +120,7 @@ DomainTerm11: Guest User
 definition:
   An unregistered or unauthenticated user who can browse public
   communities and channels in read-only mode before joining or registering.
-examples:DomainTerm5: Role
-definition:
-  A predefined set of permissions and responsibilities assigned to a user
-  within a community or channel.
 examples:
-  - Assigning a moderator role to a gamer.
-  - Granting read-only access to an audience member.
-aliases:
-  - User Role
-  - 
   - A guest user viewing public community announcements.
   - A guest user browsing channels before creating an account.
 aliases:
