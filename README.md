@@ -5,7 +5,7 @@
 # Problem Statement:
 Player Community, Moderation & Engagement Platform
 - Modern gaming communities require more than basic communication tools.  
-This project aims to design a platform that enables community building, structured moderation, and healthy engagement for gamers, audiences, and content creators while ensuring safety, scalability, and clarity of roles.
+This project aims to design a platform that enables community building, structured moderation, and healthy engagement for gamers and audiences while ensuring safety, scalability, and clarity of roles.
 
 # Core Features:
 - Community and channel creation.
@@ -14,7 +14,7 @@ This project aims to design a platform that enables community building, structur
 - Role-based moderation and administration.
 - Structured governance and rule enforcement.
   
-# Actors
+# Identified Actors
 - Audience – Observes community activities, registers for events, and can report inappropriate content.
 - Gamer – Actively participates in communities by joining channels, posting messages, interacting with others, and attending events.
 - Community Manager – Manages communities by creating channels, assigning roles, monitoring engagement, and handling community-level reports.
@@ -22,7 +22,7 @@ This project aims to design a platform that enables community building, structur
 - System Administrator – Oversees the entire platform, manages moderation rules, and analyzes system metrics.
 - System Bot (Automated Actor) – Automatically filters and flags inappropriate content, logs activities, and sends system notifications.
 
-# Actor-wise Core Features
+# Planned Features For Each Actor
 
 ## Audience
 - Watch community discussions.
@@ -63,9 +63,3 @@ This project aims to design a platform that enables community building, structur
 - Send alerts and notifications.
 - Help moderators with automation.
 
- # Collaborators:
- - Sanidhya Joshi
- - Karmanya Belsare
- - Awadhesh
- - Anant Garg
- - Rajat Jain
