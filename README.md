@@ -16,8 +16,8 @@ This project aims to design a platform that enables community building, structur
   
 # Identified Actors
 - Audience – Observes community activities, registers for events, and can report inappropriate content.
-- Gamer – Actively participates in communities by joining channels, posting messages, interacting with others, and attending events.
-- Community Manager – Manages communities by creating channels, assigning roles, monitoring engagement, and handling community-level reports.
+- Gamer – Actively participates in communities by  creating/joining channels, posting messages, interacting with others, and attending events.
+- Community Manager – Manages communities by assigning roles, monitoring engagement, and creating/hosting community event.
 - System Moderator – Reviews reports across communities, resolves escalated cases, and enforces platform-wide moderation policies.
 - System Administrator – Oversees the entire platform, manages moderation rules, and analyzes system metrics.
 - System Bot (Automated Actor) – Automatically filters and flags inappropriate content, logs activities, and sends system notifications.
@@ -26,22 +26,24 @@ This project aims to design a platform that enables community building, structur
 
 ## Audience
 - Watch community discussions.
+- Join or leave communities and channels.
 - Register and attend events.
 - Report inappropriate content.
 - Get notifications from followed communities.
 
 ## Gamer
 - Join or leave communities and channels.
+- Create communities and channels.
 - Send messages and share media.
 - Chat in real time and join events.
 - Interact with other gamers.
 - Follow community rules.
 
 ## Community Manager
-- Create and manage communities and channels.
+- Create/host Community event.
+- Manage communities and channels.
 - Assign roles to users.
 - Monitor community activity.
-- Handle reports within the community.
 - Enforce community rules.
 
 ## System Moderator
