@@ -460,44 +460,6 @@ CREATE TABLE Notifications (
                                 ON UPDATE CASCADE ON DELETE CASCADE,
 );
 
--- Increment when a membership is approved
-DELIMITER $$
-CREATE TRIGGER trg_member_count_increment
-AFTER UPDATE ON CommunityMembers
-FOR EACH ROW
-BEGIN
-    IF NEW.status = 'approved' AND OLD.status != 'approved' THEN
-        UPDATE Communities
-        SET member_count = member_count + 1
-        WHERE community_id = NEW.community_id;
-    END IF;
-END$$
-
--- Decrement when an approved member is banned, rejected, or removed
-CREATE TRIGGER trg_member_count_decrement
-AFTER UPDATE ON CommunityMembers
-FOR EACH ROW
-BEGIN
-    IF OLD.status = 'approved' AND NEW.status != 'approved' THEN
-        UPDATE Communities
-        SET member_count = GREATEST(member_count - 1, 0)
-        WHERE community_id = NEW.community_id;
-    END IF;
-END$$
-
--- Decrement on hard delete
-CREATE TRIGGER trg_member_count_on_delete
-AFTER DELETE ON CommunityMembers
-FOR EACH ROW
-BEGIN
-    IF OLD.status = 'approved' THEN
-        UPDATE Communities
-        SET member_count = GREATEST(member_count - 1, 0)
-        WHERE community_id = OLD.community_id;
-    END IF;
-END$$
-DELIMITER ;
-
 
 -- =============================================================================
 -- END OF DBschema.sql
