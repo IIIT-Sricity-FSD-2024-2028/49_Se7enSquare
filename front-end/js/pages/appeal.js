@@ -8,6 +8,7 @@
 // ==========================================
 let attachmentCount = 0;
 const MAX_ATTACHMENTS = 3;
+let uploadedEvidence = [];
 
 // ==========================================
 // 2. UTILITIES
@@ -71,6 +72,7 @@ window.handleFileUpload = async function(event) {
         try {
             await mockFileUpload(file.name);
             chip.innerHTML = `📄 ${file.name} <span class="file-chip-remove" onclick="removeFile(this)">✕</span>`;
+            uploadedEvidence.push(file.name);
             attachmentCount++;
         } catch (err) {
             chip.remove();
@@ -111,7 +113,9 @@ window.submitAppeal = async function() {
         text: appealTextEl.value.trim(),
         acknowledgement: ackSelectEl.value,
         resolution: activeRes ? activeRes.textContent : null,
-        actionId: 'ACT-DNX-2025-003847'
+        actionId: 'ACT-DNX-2025-003847',
+        evidence: uploadedEvidence,
+        userId: (typeof getCurrentUser === 'function' ? getCurrentUser()?.id : null) || undefined
     };
 
     // Simple visual validation
@@ -129,8 +133,11 @@ window.submitAppeal = async function() {
     submitBtn.disabled = true;
 
     try {
-        // Simulate API latency
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        if (window.API?.appeals) {
+            await window.API.appeals.create(formData);
+        } else {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
 
         // Transition to Success State
         document.getElementById('formWrap').style.display = 'none';
@@ -163,6 +170,7 @@ window.resetAppeal = function() {
     document.getElementById('ackSelect').value = '';
     document.getElementById('fileChips').innerHTML = '';
     attachmentCount = 0;
+    uploadedEvidence = [];
 
     // Reset Submit Button
     const submitBtn = document.querySelector('.btn-submit');

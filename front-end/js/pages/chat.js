@@ -61,6 +61,32 @@ let currentEmojiTarget = null;
 let replyingTo = null;
 let collapsedCategories = new Set();
 let attachedFile = null; // Store attached file
+let activeChannelName = "general";
+
+function escapeAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeCommunityChannel(channel) {
+  if (typeof channel === "string") {
+    return { name: channel, type: "Text" };
+  }
+  return {
+    name: channel?.name || channel?.label || "general",
+    type: channel?.type || "Text",
+  };
+}
+
+function getChannelIcon(type) {
+  if (type === "Voice") return "VC";
+  if (type === "Announcement") return "📣";
+  return "#";
+}
 
 // ==========================================
 // 2. MEMBER SIDEBAR TOGGLE
@@ -68,9 +94,56 @@ let attachedFile = null; // Store attached file
 window.toggleMemberSidebar = function () {
   const sidebar = document.getElementById("memberSidebar");
   const chip = document.getElementById("memberCountChip");
+  // More specific selector to avoid conflicts with other toggle icons
+  const icon = document.querySelector(".mem-toggle-btn .toggle-icon"); 
+  
   if (!sidebar) return;
-  const isOpen = sidebar.classList.toggle("open");
-  if (chip) chip.classList.toggle("active", isOpen);
+  
+  const isClosed = sidebar.classList.toggle("closed");
+  
+  // Sync Icon rotation explicitly
+  if (icon) {
+    icon.style.transform = isClosed ? "rotate(180deg)" : "rotate(0deg)";
+  }
+  
+  // Sync the header chip state (active when sidebar is open)
+  if (chip) {
+    if (isClosed) {
+      chip.classList.remove("active");
+    } else {
+      chip.classList.add("active");
+    }
+  }
+  
+  // Persist state globally
+  localStorage.setItem("memberSidebarClosed", isClosed);
+  
+  // Visual confirmation
+  if (typeof showToast === 'function') {
+    showToast(isClosed ? "Members list collapsed" : "Members list expanded");
+  }
+};
+
+// Initialize Sidebar State from LocalStorage
+document.addEventListener("DOMContentLoaded", () => {
+  const sidebar = document.getElementById("memberSidebar");
+  const chip = document.getElementById("memberCountChip");
+  const icon = document.querySelector(".mem-toggle-btn .toggle-icon");
+  const isClosed = localStorage.getItem("memberSidebarClosed") === "true";
+  
+  if (sidebar && isClosed) {
+    sidebar.classList.add("closed");
+    if (icon) icon.style.transform = "rotate(180deg)";
+    if (chip) chip.classList.remove("active");
+  } else if (sidebar && chip) {
+    // Default state: Sidebar is open, chip is active
+    chip.classList.add("active");
+  }
+});
+
+window.logoutUser = function () {
+  localStorage.removeItem("nexus_user");
+  window.location.href = "login.html";
 };
 
 // ==========================================
@@ -247,6 +320,7 @@ window.toggleCategory = function (categoryKey) {
 };
 
 window.setChannel = function (el, name, type) {
+  activeChannelName = name || "general";
   document
     .querySelectorAll(".ch-row")
     .forEach((r) => r.classList.remove("active"));
@@ -554,13 +628,13 @@ function addReaction(msgGroup, emoji) {
   }
 
   let existingPill = Array.from(
-    reactionsContainer.querySelectorAll(".FPS-pill"),
+    reactionsContainer.querySelectorAll(".reaction-pill"),
   ).find((pill) => pill.querySelector("span")?.textContent === emoji);
 
   if (existingPill) {
     if (existingPill.classList.contains("mine")) {
       // Already reacted — remove reaction
-      const countSpan = existingPill.querySelector(".FPS-count");
+      const countSpan = existingPill.querySelector(".reaction-count");
       const newCount = parseInt(countSpan.textContent) - 1;
       if (newCount <= 0) {
         existingPill.remove();
@@ -569,23 +643,23 @@ function addReaction(msgGroup, emoji) {
         existingPill.classList.remove("mine");
       }
     } else {
-      const countSpan = existingPill.querySelector(".FPS-count");
+      const countSpan = existingPill.querySelector(".reaction-count");
       countSpan.textContent = parseInt(countSpan.textContent) + 1;
       existingPill.classList.add("mine");
     }
   } else {
     const pill = document.createElement("div");
-    pill.className = "FPS-pill mine";
+    pill.className = "reaction-pill mine";
     pill.onclick = function () {
-      window.toggleFPS(this);
+      window.toggleReaction(this);
     };
-    pill.innerHTML = `<span>${emoji}</span><span class="FPS-count">1</span>`;
+    pill.innerHTML = `<span>${emoji}</span><span class="reaction-count">1</span>`;
     reactionsContainer.appendChild(pill);
   }
 }
 
-window.toggleFPS = function (pill) {
-  const countEl = pill.querySelector(".FPS-count");
+window.toggleReaction = function (pill) {
+  const countEl = pill.querySelector(".reaction-count");
   let count = parseInt(countEl.textContent);
   if (pill.classList.contains("mine")) {
     // Un-react
@@ -778,6 +852,13 @@ function insertAtCursor(text) {
 // ==========================================
 // 12. UTILITIES
 // ==========================================
+function scrollToBottom() {
+  const wrap = document.getElementById("messagesWrap");
+  if (wrap) {
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+}
+
 function copyCode(btn) {
   const pre = btn.closest(".code-block")?.querySelector("pre");
   if (!pre) return;
@@ -817,11 +898,6 @@ const parseMarkdown = (text) => {
   escaped = escaped.replace(/^\d+\.\s(.+)/gm, "<li>$1</li>");
 
   return escaped;
-};
-
-const scrollToBottom = () => {
-  const wrap = document.getElementById("messagesWrap");
-  if (wrap) wrap.scrollTop = wrap.scrollHeight;
 };
 
 function showToast(message) {
@@ -882,10 +958,19 @@ window.handleKey = function (e) {
   }
 };
 
-window.sendMessage = function () {
+window.toggleMute = function (btn) {
+  btn.classList.toggle("muted");
+};
+
+window.toggleDeafen = function (btn) {
+  btn.classList.toggle("deafened");
+};
+
+window.sendMessage = async function () {
   const input = document.getElementById("msgInput");
   const text = input.value.trim();
   if (!text && !attachedFile) return;
+  const outgoingFileName = attachedFile ? attachedFile.name : null;
 
   const wrap = document.getElementById("messagesWrap");
   const time = new Date().toLocaleTimeString([], {
@@ -986,6 +1071,24 @@ window.sendMessage = function () {
 
   scrollToBottom();
 
+  // Save message to localStorage only (avoids backend db.json write which triggers Live Server reload)
+  try {
+    const currentUser = typeof getCurrentUser === "function" ? getCurrentUser() : null;
+    const stored = JSON.parse(localStorage.getItem("nexus_messages") || "[]");
+    stored.push({
+      id: Date.now(),
+      channelId: activeChannelName,
+      communityId: Number(new URLSearchParams(window.location.search).get("community")) || undefined,
+      authorName: currentUser?.username || currentUser?.name || "You",
+      content: text,
+      attachments: outgoingFileName ? [outgoingFileName] : [],
+      createdAt: new Date().toISOString()
+    });
+    localStorage.setItem("nexus_messages", JSON.stringify(stored));
+  } catch (err) {
+    console.warn("[Chat] Could not save message to localStorage:", err.message);
+  }
+
   simulateResponse();
 };
 
@@ -1009,7 +1112,7 @@ function simulateResponse() {
                 </div>
                 <div class="msg-text">Got it! We'll be using the <strong>Nexus Design System</strong> to keep things consistent. Can't wait for tomorrow! 🚀</div>
                 <div class="reactions">
-                    <div class="FPS-pill" onclick="toggleFPS(this)"><span>🔥</span><span class="FPS-count">1</span></div>
+                    <div class="reaction-pill" onclick="toggleReaction(this)"><span>🔥</span><span class="reaction-count">1</span></div>
                 </div>
             </div>
             <div class="msg-actions">
@@ -1027,23 +1130,111 @@ function simulateResponse() {
 // ==========================================
 // 14. INITIALIZATION
 // ==========================================
-document.addEventListener("DOMContentLoaded", () => {
-  // Restore selected channel from session (from community page)
-  const selectedChannel = sessionStorage.getItem("selectedChannel");
+document.addEventListener("DOMContentLoaded", async () => {
+  // Fetch community details to render channels
+  const urlParams = new URLSearchParams(window.location.search);
+  const commId = urlParams.get("community") || sessionStorage.getItem("currentCommunityId") || urlParams.get("id");
+  const requestedChannel = urlParams.get("channel") || sessionStorage.getItem("selectedChannel");
+  let community = null;
+
+  if (commId && window.API && window.API.communities) {
+    try {
+      community = await window.API.communities.getOne(commId);
+    } catch (err) {
+      console.error("Failed to load community details for chat", err);
+    }
+  }
+
+  const channelsList = document.getElementById("channelsList");
+  if (channelsList && community) {
+    // Update community name/icon
+    const chatCommName = document.getElementById("chatCommName");
+    const chatCommIcon = document.getElementById("chatCommIcon");
+    if (chatCommName) chatCommName.textContent = community.name || "Community";
+    if (chatCommIcon) chatCommIcon.textContent = (community.icon && typeof community.icon === 'string') ? community.icon : "🎮";
+
+    let channelsHTML = "";
+    const communityChannels = Array.isArray(community.channels)
+      ? community.channels.map(normalizeCommunityChannel).filter(ch => ch.name)
+      : [];
+
+    if (communityChannels.length > 0) {
+      const categories = {};
+      communityChannels.forEach(ch => {
+        const type = ch.type || "Text";
+        if (!categories[type]) categories[type] = [];
+        categories[type].push(ch);
+      });
+
+      for (const [type, channels] of Object.entries(categories)) {
+        channelsHTML += `
+          <div class="ch-category" data-category="${type.toLowerCase()}">
+            <div class="ch-group-lbl" onclick="toggleCategory('${type.toLowerCase()}')">
+              <span class="cat-arrow">▾</span> ${type.toUpperCase()} CHANNELS
+            </div>
+            <div class="ch-category-items">
+              ${channels.map(ch => `
+                <div class="ch-row" onclick="setChannel(this, '${escapeAttr(ch.name)}', '${getChannelIcon(ch.type)}')">
+                  <span class="ch-type">${getChannelIcon(ch.type)}</span>
+                  <span class="ch-lbl">${escapeAttr(ch.name)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      channelsHTML = `
+        <div class="ch-category" data-category="text">
+          <div class="ch-group-lbl">TEXT CHANNELS</div>
+          <div class="ch-category-items">
+             <div class="ch-row active" onclick="setChannel(this, 'general', '#')">
+               <span class="ch-type">#</span><span class="ch-lbl">general</span>
+             </div>
+          </div>
+        </div>
+      `;
+    }
+    channelsList.innerHTML = channelsHTML;
+  }
+
+  // Restore selected channel from URL/session (from community page)
+  const selectedChannel = requestedChannel;
   const fromCommunityPage = sessionStorage.getItem("fromCommunityPage");
 
-  if (selectedChannel && fromCommunityPage === "true") {
-    const channelName = selectedChannel.replace("#", "");
-    document.querySelectorAll(".ch-row").forEach((row) => {
+  if (selectedChannel) {
+    const channelName = decodeURIComponent(selectedChannel).replace("#", "");
+    const rows = document.querySelectorAll(".ch-row");
+    let found = false;
+    rows.forEach((row) => {
       const channelLabel = row.querySelector(".ch-lbl");
-      if (channelLabel && channelLabel.textContent === channelName) {
+      if (channelLabel && channelLabel.textContent.trim().toLowerCase() === channelName.toLowerCase()) {
         const icon = row.querySelector(".ch-type");
         const iconText = icon ? icon.textContent : "#";
         setChannel(row, channelName, iconText);
-        sessionStorage.removeItem("selectedChannel");
-        sessionStorage.removeItem("fromCommunityPage");
+        found = true;
       }
     });
+    
+    // Fallback if not found
+    if (!found && rows.length > 0) {
+      const firstRow = rows[0];
+      const name = firstRow.querySelector(".ch-lbl")?.textContent || "general";
+      const icon = firstRow.querySelector(".ch-type")?.textContent || "#";
+      setChannel(firstRow, name, icon);
+    }
+
+    sessionStorage.removeItem("selectedChannel");
+    sessionStorage.removeItem("fromCommunityPage");
+  } else {
+      // Default to first channel
+      const rows = document.querySelectorAll(".ch-row");
+      if (rows.length > 0) {
+          const firstRow = rows[0];
+          const name = firstRow.querySelector(".ch-lbl")?.textContent || "general";
+          const icon = firstRow.querySelector(".ch-type")?.textContent || "#";
+          setChannel(firstRow, name, icon);
+      }
   }
 
   scrollToBottom();
@@ -1061,6 +1252,7 @@ document.addEventListener("DOMContentLoaded", () => {
             from { opacity: 0; transform: translateY(10px); }
             to   { opacity: 1; transform: translateY(0); }
         }
+        .send-btn { color: #fff; }
     `;
   document.head.appendChild(style);
 

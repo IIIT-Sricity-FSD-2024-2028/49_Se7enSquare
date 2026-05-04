@@ -230,7 +230,7 @@ window.goStep = function (n) {
     n === totalSteps ? "🚀 Create Community" : "Continue →";
 };
 
-window.nextStep = function () {
+window.nextStep = async function () {
   // Channel Creation Validation (Single Page)
   if (activePage === "channel") {
     const cName = document.getElementById("ch-name-main");
@@ -268,21 +268,70 @@ window.nextStep = function () {
     return;
   }
 
-  // Community Creation Wizard Progression
-  if (currentStep < totalSteps) {
-    window.goStep(currentStep + 1);
-  } else {
-    // Submitting on final step
-    if (window.isStepValid(currentStep)) {
-      window.toast("🎉 Community created! Redirecting to dashboard…");
+    // Community Creation Wizard Progression
+    if (currentStep < totalSteps) {
+        window.goStep(currentStep + 1);
+    } else {
+        // Submitting on final step
+        if (window.isStepValid(currentStep)) {
+            const communityName = document.getElementById('comm-name')?.value?.trim();
+            const communityDesc = document.getElementById('comm-desc')?.value?.trim();
+            const categoryEl   = document.querySelector('.cat-item.on .cat-lbl');
+            const category     = categoryEl ? categoryEl.textContent.trim() : 'Gaming';
+            const user         = typeof getCurrentUser === 'function' ? getCurrentUser() : {};
+            const userId       = Number(user?.id) || 3;
 
-      // --- NEW REDIRECT LOGIC ---
-      setTimeout(() => {
-        window.location.href = "dashboard.html";
-      }, 1500); // 1.5 second delay so the user can read the toast
-      // --------------------------
+            // ── Collect channels from Step 3 wizard ───────────────────
+            const channelEls = document.querySelectorAll('#ch-list .ch-item .ch-name');
+            const channels   = Array.from(channelEls)
+                .map(el => el.textContent.replace(/^#/, '').trim())
+                .filter(Boolean);
+            // Default channel if wizard list is empty
+            if (channels.length === 0) channels.push('general');
+
+            const newComm = {
+                name:        communityName,
+                description: communityDesc,
+                ownerId:     userId,
+                tags:        [category.toLowerCase().replace(/\s+/g, '-')],
+                channels:    channels,   // ← user-defined channels from Step 3
+                icon:        document.getElementById('pc-ico')?.textContent?.trim() || '⚡',
+                category:    category,
+                slug:        communityName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                memberCount: 1,
+                onlineCount: 1,
+            };
+
+            try {
+                window.toast('🚀 Creating community…');
+                const created = window.API
+                    ? await window.API.communities.create(newComm)
+                    : null;
+
+                if (created) {
+                    const id = String(created.id);
+
+                    // ── Auto-join the creator ────────────────────────────
+                    let joinedList = JSON.parse(localStorage.getItem('nexus_joined_communities') || '[]');
+                    if (!joinedList.includes(id)) { joinedList.push(id); }
+                    localStorage.setItem('nexus_joined_communities', JSON.stringify(joinedList));
+
+                    // ── Track ownership by community ID ──────────────────
+                    let ownedIds = JSON.parse(localStorage.getItem('nexus_owned_community_ids') || '[]');
+                    if (!ownedIds.includes(id)) { ownedIds.push(id); }
+                    localStorage.setItem('nexus_owned_community_ids', JSON.stringify(ownedIds));
+
+                    window.toast('🎉 Community created! Redirecting…');
+                    setTimeout(() => { window.location.href = `community-page.html?id=${created.id}`; }, 1500);
+                } else {
+                    window.toast('⚠️ Could not create community — API unavailable.');
+                }
+            } catch (err) {
+                console.error('[CreateCommunity] Error:', err);
+                window.toast(`⚠️ Error: ${err.message}`);
+            }
+        }
     }
-  }
 };
 
 window.prevStep = function() {

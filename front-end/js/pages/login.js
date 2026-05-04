@@ -1,30 +1,66 @@
 /**
  * Gameunity — Login / Register / Forgot Password Logic
- * Handles form validation, auth tab switching, role-based redirects,
- * password strength checking, and demo quick-login.
+ * Fixed: Password Strength Meter, Persistent Registration, and Login matching.
  */
 
 // ==========================================
-// 1. STATE & CONFIG
+// 1. STATE & PERSISTENCE
 // ==========================================
 let currentTab = 'login';
 let toastTimeout;
 
 const ROLE_REDIRECTS = {
-    superuser: 'dashboard.html',
-    mod: 'dashboard.html',
-    gamer: 'dashboard.html',
-    audience: 'dashboard.html'
+    admin: 'admin-dashboard.html',
+    community_manager: 'events.html',
+    moderator: 'dashboard.html',
+    user: 'dashboard.html',
+    gamer: 'dashboard.html'
 };
 
-// Mock registered users for prototype
-const MOCK_USERS = [
-    { email: 'rajat', username: 'rajat', password: 'Rajat@123', role: 'superuser' },
-    { email: 'karmanya', username: 'karmanya', password: 'Karmanya@123', role: 'mod' },
-    { email: 'awadhesh', username: 'awadhesh', password: 'Awadhesh@123', role: 'gamer' },
-    { email: 'anant', username: 'anant', password: 'Anant@123', role: 'gamer' },
-    { email: 'sanidhya', username: 'sanidhya', password: 'Sanidhya@123', role: 'audience' }
+// Default users for the first-time load
+const DEFAULT_USERS = [
+    { email: 'rajat@gameunity.com', username: 'rajat', firstName: 'Rajat', lastName: 'Jain', password: 'Rajat@123', role: 'admin', avatar: null },
+    { email: 'karmanya@gameunity.com', username: 'karmanya', firstName: 'Karmanya', lastName: 'Bansal', password: 'Karmanya@123', role: 'moderator', avatar: null },
+    { email: 'anant@gameunity.com', username: 'anant', firstName: 'Anant', lastName: 'Gupta', password: 'Demo@123', role: 'community_manager', avatar: null },
+    { email: 'awadhesh@gameunity.com', username: 'awadhesh', firstName: 'Awadhesh', lastName: 'Kumar', password: 'Demo@123', role: 'user', avatar: null }
 ];
+
+/** * Persistent Mock Database Helpers 
+ */
+function getAllUsers() {
+    let stored = localStorage.getItem('gameunity_accounts');
+    let users = stored ? JSON.parse(stored) : [];
+    
+    // Force Sync Default Personas (Ensure passwords/roles are always current)
+    DEFAULT_USERS.forEach(defUser => {
+        const index = users.findIndex(u => u.username.toLowerCase() === defUser.username.toLowerCase() || u.email.toLowerCase() === defUser.email.toLowerCase());
+        if (index === -1) {
+            users.push(defUser);
+        } else {
+            // Update existing record to match the default (in case of stale data)
+            users[index] = { ...users[index], ...defUser };
+        }
+    });
+
+    users = users.map(user => ({
+        ...user,
+        role: typeof normalizeRole === 'function' ? normalizeRole(user.role) : (user.role === 'gamer' ? 'user' : user.role)
+    }));
+    
+    localStorage.setItem('gameunity_accounts', JSON.stringify(users));
+    return users;
+}
+
+function saveNewUser(userData) {
+    const users = getAllUsers();
+    // Check if user already exists
+    const exists = users.some(u => u.email === userData.email || u.username === userData.username);
+    if (exists) return false;
+    
+    users.push(userData);
+    localStorage.setItem('gameunity_accounts', JSON.stringify(users));
+    return true;
+}
 
 // ==========================================
 // 2. TAB SWITCHING
@@ -32,14 +68,9 @@ const MOCK_USERS = [
 
 window.switchAuthTab = function(tab) {
     currentTab = tab;
-
-    // Hide all forms
     document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
-
-    // Remove active class from tabs
     document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
 
-    // Show tabs only for login/register
     const tabsContainer = document.getElementById('authTabs');
     const subtitle = document.getElementById('loginSubtitle');
 
@@ -58,67 +89,27 @@ window.switchAuthTab = function(tab) {
         tabsContainer.style.display = 'none';
         if (subtitle) subtitle.textContent = '';
     }
-
-    // Clear all errors when switching tabs
     clearAllErrors();
 };
 
 // ==========================================
-// 3. VALIDATION ENGINE
+// 3. VALIDATION HELPERS
 // ==========================================
 
 function showError(fieldId, message) {
     const errorEl = document.getElementById(fieldId + '-error');
     const inputEl = document.getElementById(fieldId);
-
-    if (errorEl) {
-        errorEl.textContent = message;
-        errorEl.classList.add('visible');
-    }
-    if (inputEl) {
-        inputEl.classList.add('error');
-        inputEl.classList.remove('success');
-    }
-}
-
-function clearError(fieldId) {
-    const errorEl = document.getElementById(fieldId + '-error');
-    const inputEl = document.getElementById(fieldId);
-
-    if (errorEl) {
-        errorEl.textContent = '';
-        errorEl.classList.remove('visible');
-    }
-    if (inputEl) {
-        inputEl.classList.remove('error');
-    }
-}
-
-function markSuccess(fieldId) {
-    const inputEl = document.getElementById(fieldId);
-    if (inputEl) {
-        inputEl.classList.remove('error');
-        inputEl.classList.add('success');
-    }
+    if (errorEl) { errorEl.textContent = message; errorEl.classList.add('visible'); }
+    if (inputEl) { inputEl.classList.add('error'); }
 }
 
 function clearAllErrors() {
-    document.querySelectorAll('.form-error').forEach(e => {
-        e.textContent = '';
-        e.classList.remove('visible');
-    });
-    document.querySelectorAll('.form-input').forEach(i => {
-        i.classList.remove('error', 'success');
-    });
+    document.querySelectorAll('.form-error').forEach(e => { e.textContent = ''; e.classList.remove('visible'); });
+    document.querySelectorAll('.form-input').forEach(i => { i.classList.remove('error', 'success'); });
 }
 
-function isValidEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidHandle(handle) {
-    return /^[a-zA-Z0-9_]{3,20}$/.test(handle);
-}
+function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function isValidHandle(handle) { return /^[a-zA-Z0-9_]{3,20}$/.test(handle); }
 
 // ==========================================
 // 4. LOGIN HANDLER
@@ -128,73 +119,69 @@ window.handleLogin = function(e) {
     e.preventDefault();
     clearAllErrors();
 
-    const email = document.getElementById('login-email').value.trim();
+    const inputVal = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const role = document.getElementById('login-role').value;
-    let isValid = true;
+    const role = typeof normalizeRole === 'function'
+        ? normalizeRole(document.getElementById('login-role').value)
+        : document.getElementById('login-role').value;
 
-    // Validate email/username
-    if (!email) {
-        showError('login-email', 'Email or username is required');
-        isValid = false;
-    } else if (email.length < 3) {
-        showError('login-email', 'Must be at least 3 characters');
-        isValid = false;
-    }
-
-    // Validate password
-    if (!password) {
-        showError('login-password', 'Password is required');
-        isValid = false;
-    } else if (password.length < 6) {
-        showError('login-password', 'Password must be at least 6 characters');
-        isValid = false;
-    }
-
-    // Validate role
-    if (!role) {
-        showError('login-role', 'Please select a role to sign in');
-        isValid = false;
-    }
-
-    if (!isValid) {
+    if (!inputVal || !password || !role) {
+        showToast('⚠️', 'Please fill all login fields.');
         shakeCard();
         return;
     }
 
-    // Simulate authentication
     const btn = document.getElementById('login-btn');
     btn.classList.add('loading');
     btn.disabled = true;
 
-    setTimeout(() => {
-        // Check if a mock user matches — use their display name if found
-        const matchedUser = MOCK_USERS.find(u => 
-            (u.email === email || u.username === email) && u.password === password && u.role === role
-        );
+    setTimeout(async () => {
+        const users = getAllUsers();
+        let matchedUser = null;
 
-        // Save session to localStorage
-        const user = {
-            username: matchedUser ? matchedUser.username : (email.includes('@') ? email.split('@')[0] : email),
-            email: matchedUser ? matchedUser.email : (email.includes('@') ? email : email + '@nexushub.io'),
-            role: role,
-            loginTime: new Date().toISOString(),
-            token: 'mock_token_' + Math.random().toString(36).substr(2)
-        };
-        localStorage.setItem('nexus_user', JSON.stringify(user));
-
-        // Seed community ownership for demo (gamer owns "pro-gamers")
-        if (role === 'gamer') {
-            localStorage.setItem('nexus_owned_communities', JSON.stringify(['pro-gamers']));
-        } else {
-            localStorage.removeItem('nexus_owned_communities');
+        try {
+            matchedUser = window.API?.auth
+                ? await window.API.auth.login({ login: inputVal, password, role })
+                : null;
+        } catch (err) {
+            console.warn('[Login] Backend login failed, checking local accounts:', err.message);
         }
 
-        showToast('✅', 'Login successful! Redirecting...');
+        if (!matchedUser) {
+            matchedUser = users.find(u =>
+                (u.email.toLowerCase() === inputVal.toLowerCase() || u.username.toLowerCase() === inputVal.toLowerCase()) &&
+                u.password === password &&
+                (typeof normalizeRole === 'function' ? normalizeRole(u.role) : u.role) === role
+            );
+        }
 
-        setTimeout(() => {
-            window.location.href = ROLE_REDIRECTS[role] || 'dashboard.html';
-        }, 800);
+        if (!matchedUser) {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            showError('login-password', 'Invalid credentials or role.');
+            showToast('❌', 'Login failed.');
+            shakeCard();
+            return;
+        }
+
+        localStorage.setItem('nexus_user', JSON.stringify({
+            firstName: matchedUser.firstName || (matchedUser.fullname || matchedUser.username).split(' ')[0] || matchedUser.username,
+            lastName: matchedUser.lastName || (matchedUser.fullname || '').split(' ').slice(1).join(' '),
+            name: matchedUser.fullname || `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim() || matchedUser.username,
+            username: matchedUser.username,
+            role: matchedUser.role,
+            avatar: matchedUser.avatar || null,
+            loginTime: new Date().toISOString()
+        }));
+        if (typeof persistCurrentUser === 'function') {
+            persistCurrentUser(JSON.parse(localStorage.getItem('nexus_user')));
+        } else {
+            localStorage.setItem('currentUser', localStorage.getItem('nexus_user'));
+            localStorage.setItem('role', matchedUser.role);
+        }
+
+        showToast('✅', 'Login successful!');
+        setTimeout(() => { window.location.href = ROLE_REDIRECTS[role] || 'dashboard.html'; }, 800);
     }, 1200);
 };
 
@@ -211,194 +198,83 @@ window.handleRegister = function(e) {
     const handle = document.getElementById('reg-handle').value.trim();
     const password = document.getElementById('reg-password').value;
     const confirm = document.getElementById('reg-confirm').value;
-    const role = document.getElementById('reg-role').value;
+    const role = typeof normalizeRole === 'function'
+        ? normalizeRole(document.getElementById('reg-role').value)
+        : document.getElementById('reg-role').value;
     const terms = document.getElementById('reg-terms').checked;
-    let isValid = true;
 
-    // Full name
-    if (!fullname) {
-        showError('reg-fullname', 'Full name is required');
-        isValid = false;
-    } else if (fullname.length < 2) {
-        showError('reg-fullname', 'Name must be at least 2 characters');
-        isValid = false;
-    } else if (fullname.length > 50) {
-        showError('reg-fullname', 'Name must be under 50 characters');
-        isValid = false;
-    }
+    let valid = true;
+    if (!fullname) { showError('reg-fullname', 'Required'); valid = false; }
+    if (!isValidEmail(email)) { showError('reg-email', 'Invalid email'); valid = false; }
+    if (!isValidHandle(handle)) { showError('reg-handle', '3-20 chars only'); valid = false; }
+    if (password.length < 8) { showError('reg-password', 'Min 8 chars'); valid = false; }
+    if (password !== confirm) { showError('reg-confirm', 'No match'); valid = false; }
+    if (!role) { showError('reg-role', 'Select role'); valid = false; }
+    if (!terms) { showToast('⚠️', 'Accept terms'); valid = false; }
 
-    // Email
-    if (!email) {
-        showError('reg-email', 'Email address is required');
-        isValid = false;
-    } else if (!isValidEmail(email)) {
-        showError('reg-email', 'Please enter a valid email (e.g., user@example.com)');
-        isValid = false;
-    }
+    if (!valid) { shakeCard(); return; }
 
-    // Handle
-    if (!handle) {
-        showError('reg-handle', 'Username is required');
-        isValid = false;
-    } else if (!isValidHandle(handle)) {
-        showError('reg-handle', 'Username: 3-20 characters, letters/numbers/underscores only');
-        isValid = false;
-    }
-
-    // Password
-    if (!password) {
-        showError('reg-password', 'Password is required');
-        isValid = false;
-    } else if (password.length < 8) {
-        showError('reg-password', 'Password must be at least 8 characters');
-        isValid = false;
-    } else if (!/[A-Z]/.test(password)) {
-        showError('reg-password', 'Must include at least one uppercase letter');
-        isValid = false;
-    } else if (!/[0-9]/.test(password)) {
-        showError('reg-password', 'Must include at least one number');
-        isValid = false;
-    } else if (!/[!@#$%^&*]/.test(password)) {
-        showError('reg-password', 'Must include at least one special character (!@#$%^&*)');
-        isValid = false;
-    }
-
-    // Confirm password
-    if (!confirm) {
-        showError('reg-confirm', 'Please confirm your password');
-        isValid = false;
-    } else if (password !== confirm) {
-        showError('reg-confirm', 'Passwords do not match');
-        isValid = false;
-    }
-
-    // Role
-    if (!role) {
-        showError('reg-role', 'Please select an account type');
-        isValid = false;
-    }
-
-    // Terms
-    if (!terms) {
-        showError('reg-terms', 'You must agree to the Terms of Service');
-        isValid = false;
-    }
-
-    if (!isValid) {
-        shakeCard();
-        return;
-    }
-
-    // Simulate registration
     const btn = document.getElementById('register-btn');
     btn.classList.add('loading');
     btn.disabled = true;
 
-    setTimeout(() => {
-        // Save new user to localStorage mock store
-        const user = {
-            username: handle,
-            fullname: fullname,
-            email: email,
-            role: role,
-            loginTime: new Date().toISOString(),
-            token: 'mock_token_' + Math.random().toString(36).substr(2)
-        };
-        localStorage.setItem('nexus_user', JSON.stringify(user));
-
-        showToast('🎉', 'Account created! Welcome to Gameunity!');
-
-        setTimeout(() => {
-            window.location.href = ROLE_REDIRECTS[role] || 'dashboard.html';
-        }, 800);
+    setTimeout(async () => {
+        const newUser = { username: handle, fullname, email, password, role };
+        if (saveNewUser(newUser)) {
+            try {
+                if (window.API?.auth) {
+                    const nameParts = fullname.split(' ').filter(Boolean);
+                    await window.API.auth.register({
+                        username: handle,
+                        email,
+                        password,
+                        role,
+                        firstName: nameParts[0] || '',
+                        lastName: nameParts.slice(1).join(' ')
+                    });
+                }
+            } catch (err) {
+                console.warn('[Register] Backend register failed, keeping local account:', err.message);
+            }
+            showToast('🎉', 'Account ready!');
+            // Auto-login
+            const nameParts = fullname.split(' ').filter(Boolean);
+            const user = {
+                firstName: nameParts[0] || '',
+                lastName: nameParts.slice(1).join(' '),
+                name: fullname,
+                username: handle,
+                role,
+                avatar: null,
+                loginTime: new Date().toISOString()
+            };
+            if (typeof persistCurrentUser === 'function') persistCurrentUser(user);
+            else {
+                localStorage.setItem('nexus_user', JSON.stringify(user));
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                localStorage.setItem('role', role);
+            }
+            setTimeout(() => { window.location.href = ROLE_REDIRECTS[role] || 'dashboard.html'; }, 1000);
+        } else {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            showError('reg-email', 'User already exists');
+        }
     }, 1500);
 };
 
 // ==========================================
-// 6. FORGOT PASSWORD HANDLER
-// ==========================================
-
-window.handleForgotPassword = function(e) {
-    e.preventDefault();
-    clearAllErrors();
-
-    const email = document.getElementById('forgot-email').value.trim();
-    let isValid = true;
-
-    if (!email) {
-        showError('forgot-email', 'Email address is required');
-        isValid = false;
-    } else if (!isValidEmail(email)) {
-        showError('forgot-email', 'Please enter a valid email address');
-        isValid = false;
-    }
-
-    if (!isValid) {
-        shakeCard();
-        return;
-    }
-
-    const btn = document.getElementById('forgot-btn');
-    btn.classList.add('loading');
-    btn.disabled = true;
-
-    setTimeout(() => {
-        document.getElementById('form-forgot').classList.add('hidden');
-        document.getElementById('form-forgot-success').classList.remove('hidden');
-        showToast('✉️', 'Reset link sent to ' + email);
-
-        btn.classList.remove('loading');
-        btn.disabled = false;
-    }, 1200);
-};
-
-// ==========================================
-// 7. QUICK LOGIN (Demo Personas)
-// ==========================================
-
-window.quickLogin = function(username, role) {
-    // Find the matching mock user to get the correct password
-    const mockUser = MOCK_USERS.find(u => u.email === username || u.username === username);
-    const password = mockUser ? mockUser.password : 'Demo@123';
-
-    document.getElementById('login-email').value = username;
-    document.getElementById('login-password').value = password;
-    document.getElementById('login-role').value = role;
-
-    // Trigger login
-    document.getElementById('form-login').dispatchEvent(new Event('submit'));
-};
-
-window.mockGoogleLogin = function() {
-    showToast('🔗', 'Google OAuth — simulated for prototype');
-    setTimeout(() => {
-        const user = {
-            username: 'GoogleUser',
-            email: 'user@gmail.com',
-            role: 'gamer',
-            loginTime: new Date().toISOString(),
-            token: 'mock_google_token'
-        };
-        localStorage.setItem('nexus_user', JSON.stringify(user));
-        window.location.href = 'dashboard.html';
-    }, 1000);
-};
-
-// ==========================================
-// 8. PASSWORD STRENGTH METER
+// 6. PASSWORD STRENGTH METER (Fixed)
 // ==========================================
 
 function checkPasswordStrength(password) {
     let score = 0;
     if (password.length >= 8) score++;
-    if (password.length >= 12) score++;
     if (/[A-Z]/.test(password)) score++;
     if (/[0-9]/.test(password)) score++;
-    if (/[!@#$%^&*()_+\-=\[\]{};:'"\\|,.<>\/?]/.test(password)) score++;
-
-    const levels = ['', 'weak', 'fair', 'good', 'good', 'strong'];
-    const labels = ['', 'Weak', 'Fair', 'Good', 'Good', 'Strong'];
-
+    if (/[!@#$%^&*]/.test(password)) score++;
+    const levels = ['', 'weak', 'fair', 'good', 'strong'];
+    const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
     return { level: levels[score] || 'weak', label: labels[score] || 'Weak' };
 }
 
@@ -407,212 +283,82 @@ function initPasswordStrength() {
     const strengthFill = document.getElementById('strength-fill');
     const strengthText = document.getElementById('strength-text');
 
-    if (!passwordInput) return;
+    if (!passwordInput || !strengthFill) return;
 
     passwordInput.addEventListener('input', function() {
-        const val = this.value;
-        if (!val) {
+        if (!this.value) {
             strengthFill.className = 'strength-fill';
             strengthText.textContent = '';
             return;
         }
-
-        const { level, label } = checkPasswordStrength(val);
+        const { level, label } = checkPasswordStrength(this.value);
         strengthFill.className = 'strength-fill ' + level;
         strengthText.textContent = label;
     });
 }
 
 // ==========================================
-// 9. PASSWORD TOGGLE
+// 7. UI HELPERS
 // ==========================================
 
 window.togglePassword = function(btn) {
     const input = btn.previousElementSibling;
-    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+    btn.textContent = input.type === 'password' ? '🙈' : '👁️';
+};
 
-    if (input.type === 'password') {
-        input.type = 'text';
-        btn.textContent = '👁️';
-    } else {
-        input.type = 'password';
-        btn.textContent = '🙈';
+window.quickLogin = function(username, role) {
+    // 1. Ensure we are on the login tab
+    if (typeof switchAuthTab === 'function') switchAuthTab('login');
+    
+    const users = getAllUsers();
+    const user = users.find(u => u.username === username);
+    
+    const emailInput = document.getElementById('login-email');
+    const passInput = document.getElementById('login-password');
+    const roleInput = document.getElementById('login-role');
+    
+    if (emailInput) emailInput.value = username;
+    if (passInput) passInput.value = user ? user.password : 'Demo@123';
+    if (roleInput) roleInput.value = role;
+    
+    // 2. Explicitly call handleLogin with a mock event
+    if (typeof handleLogin === 'function') {
+        handleLogin({ preventDefault: () => {} });
     }
 };
 
-// ==========================================
-// 10. UI HELPERS
-// ==========================================
-
 function shakeCard() {
     const card = document.getElementById('loginCard');
-    if (card) {
-        card.classList.add('shake');
-        setTimeout(() => card.classList.remove('shake'), 400);
-    }
+    if (card) { card.classList.add('shake'); setTimeout(() => card.classList.remove('shake'), 400); }
 }
 
 window.showToast = function(icon, msg) {
     const t = document.getElementById('toast');
-    const ic = document.getElementById('toastIcon');
-    const ms = document.getElementById('toastMsg');
-
-    if (!t || !ic || !ms) return;
-
-    ic.textContent = icon;
-    ms.textContent = msg;
+    document.getElementById('toastIcon').textContent = icon;
+    document.getElementById('toastMsg').textContent = msg;
     t.classList.add('show');
-
     clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => t.classList.remove('show'), 2800);
 };
 
 // ==========================================
-// 11. BACKGROUND CANVAS
-// ==========================================
-
-function initBgCanvas() {
-    const canvas = document.getElementById('bgCanvas');
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    let particles = [];
-
-    function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-
-    function createParticles() {
-        particles = [];
-        const count = Math.floor((canvas.width * canvas.height) / 15000);
-        for (let i = 0; i < count; i++) {
-            particles.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                r: Math.random() * 1.5 + 0.3,
-                dx: (Math.random() - 0.5) * 0.3,
-                dy: (Math.random() - 0.5) * 0.3,
-                alpha: Math.random() * 0.4 + 0.1
-            });
-        }
-    }
-
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        particles.forEach(p => {
-            p.x += p.dx;
-            p.y += p.dy;
-
-            if (p.x < 0) p.x = canvas.width;
-            if (p.x > canvas.width) p.x = 0;
-            if (p.y < 0) p.y = canvas.height;
-            if (p.y > canvas.height) p.y = 0;
-
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(91, 110, 245, ${p.alpha})`;
-            ctx.fill();
-        });
-
-        requestAnimationFrame(draw);
-    }
-
-    resize();
-    createParticles();
-    draw();
-
-    window.addEventListener('resize', () => {
-        resize();
-        createParticles();
-    });
-}
-
-// ==========================================
-// 12. REAL-TIME INPUT VALIDATION
-// ==========================================
-
-function initRealTimeValidation() {
-    // Login form
-    const loginEmail = document.getElementById('login-email');
-    const loginPassword = document.getElementById('login-password');
-
-    if (loginEmail) {
-        loginEmail.addEventListener('blur', function() {
-            if (this.value.trim() && this.value.trim().length >= 3) {
-                clearError('login-email');
-                markSuccess('login-email');
-            }
-        });
-    }
-
-    if (loginPassword) {
-        loginPassword.addEventListener('blur', function() {
-            if (this.value && this.value.length >= 6) {
-                clearError('login-password');
-                markSuccess('login-password');
-            }
-        });
-    }
-
-    // Register form — real-time validation on blur
-    const regFields = [
-        { id: 'reg-fullname', validate: v => v.length >= 2 },
-        { id: 'reg-email', validate: v => isValidEmail(v) },
-        { id: 'reg-handle', validate: v => isValidHandle(v) },
-        { id: 'reg-password', validate: v => v.length >= 8 }
-    ];
-
-    regFields.forEach(({ id, validate }) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('blur', function() {
-                if (this.value.trim() && validate(this.value.trim())) {
-                    clearError(id);
-                    markSuccess(id);
-                }
-            });
-        }
-    });
-
-    // Confirm password — real-time match check
-    const confirmEl = document.getElementById('reg-confirm');
-    if (confirmEl) {
-        confirmEl.addEventListener('input', function() {
-            const password = document.getElementById('reg-password').value;
-            if (this.value && this.value === password) {
-                clearError('reg-confirm');
-                markSuccess('reg-confirm');
-            } else if (this.value && this.value !== password) {
-                showError('reg-confirm', 'Passwords do not match');
-            }
-        });
-    }
-}
-
-// ==========================================
-// 13. INITIALIZATION
+// 8. INITIALIZATION
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if already logged in
+    // 1. Restore Strength Meter
+    initPasswordStrength();
+
+    // 2. Handle background and session check
     const session = localStorage.getItem('nexus_user');
     if (session) {
         try {
             const user = JSON.parse(session);
-            if (user && user.role) {
-                window.location.href = ROLE_REDIRECTS[user.role] || 'dashboard.html';
-                return;
-            }
-        } catch (e) {
-            localStorage.removeItem('nexus_user');
-        }
+            window.location.href = ROLE_REDIRECTS[user.role] || 'dashboard.html';
+        } catch(e) { localStorage.removeItem('nexus_user'); }
     }
 
-    initBgCanvas();
-    initPasswordStrength();
-    initRealTimeValidation();
-
-    console.log('%c[Gameunity] %cLogin module initialized.', 'color: #5B6EF5; font-weight: bold;', 'color: #aaa;');
+    // 3. Initialize "Database"
+    getAllUsers();
 });

@@ -1,783 +1,666 @@
 /**
- * Gameunity — Events Module Logic
- * Handles event discovery filtering, registration states, and the creation wizard.
+ * Se7enSquare — Events Page
+ * Fully backend-driven: all CRUD goes to /api/events & /api/communities
  */
 
-// ==========================================
-// 1. STATE & CONFIG
-// ==========================================
-let currentActiveTab = "upcoming";
-let activeFilter = "all";
+let currentActiveTab = 'upcoming';
+let activeFilter     = 'all events';
+let selectedEventType = 'Online';
 
-const COMMUNITY_EVENTS_STORAGE_KEY = "nexus_community_events";
+let _events      = [];
+let _communities = [];
+let _eventRegistrations = [];
 
-// ==========================================
-// 1.5 RBAC - HIDE CREATE EVENT FOR AUDIENCE
-// ==========================================
+const EVENTS_STORAGE_KEY = 'events';
 
-/**
- * Hides the "Create Event" option for audience users
- * Only gamers (and higher roles) can create events
- */
-function enforceCreateEventPermissions() {
-  const user = getCurrentUser();
+function readStoredEvents() {
+    try {
+        const events = JSON.parse(localStorage.getItem(EVENTS_STORAGE_KEY)) || [];
+        return Array.isArray(events) ? events : [];
+    } catch (e) {}
 
-  // If user is not logged in or is an audience member, hide create event UI
-  if (!user || user.role === "audience") {
-    // Hide the "Create Event" tab button (3rd tab)
-    const createTabBtn = document.querySelector(".tab-btn:nth-child(3)");
-    if (createTabBtn) {
-      createTabBtn.style.display = "none";
+    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify([]));
+    return [];
+}
+
+function writeStoredEvents(events) {
+    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+}
+
+function createEvent(data) {
+    const events = readStoredEvents();
+    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const event = {
+        ...data,
+        id: Date.now(),
+        createdBy: currentUser?.username || currentUser?.name || data.createdBy || 'user1',
+        attendees: 0,
+        status: 'pending'
+    };
+
+    events.push(event);
+    writeStoredEvents(events);
+    alert('Event request sent for approval');
+    return event;
+}
+
+function isApprovedEvent(event) {
+    return event.status === 'approved';
+}
+
+function canApproveEvents() {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const role = typeof normalizeRole === 'function' ? normalizeRole(user?.role) : user?.role;
+    return role === 'community_manager' || role === 'manager' || role === 'admin';
+}
+
+function isSystemAdmin() {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    return user?.role === 'admin';
+}
+
+// ── Load ─────────────────────────────────────────────────────────────────────
+async function loadData() {
+    try {
+        [_events, _communities] = await Promise.all([
+            window.API.events.getAll(),
+            window.API.communities.getAll()
+        ]);
+        writeStoredEvents(_events);
+        const userId = await resolveCurrentUserId();
+        _eventRegistrations = await window.API.eventRegistrations.getAll({ userId });
+        localStorage.setItem('nexus_registered_events', JSON.stringify(_eventRegistrations.map(item => String(item.eventId))));
+    } catch (err) {
+        console.error('[Events] Backend error:', err);
+        _events = readStoredEvents();
+        _communities = [];
+        _eventRegistrations = [];
     }
 
-    // Hide the "+ Create Event" button
-    const createBtn = document.querySelector(".btn-create");
-    if (createBtn) {
-      createBtn.style.display = "none";
+    if (!_communities.length) {
+        _communities = [
+            { id: 'pro-gamers', slug: 'pro-gamers', name: 'Pro Gamers', icon: '⚡' },
+            { id: 'gameunity', slug: 'gameunity', name: 'Gameunity', icon: '◇' }
+        ];
+    }
+}
+
+async function resolveCurrentUserId() {
+    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (currentUser?.id) return Number(currentUser.id);
+    try {
+        const users = await window.API.users.getAll();
+        const matched = users.find(user =>
+            user.username === currentUser?.username || user.email === currentUser?.email
+        );
+        if (matched?.id && currentUser && typeof persistCurrentUser === 'function') {
+            persistCurrentUser({ ...currentUser, id: matched.id });
+        }
+        return matched?.id || 4;
+    } catch (err) {
+        return 4;
+    }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() {
+    const userRegistrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
+    updateTabCounts(userRegistrations);
+    renderRoleControls();
+
+    if (currentActiveTab === 'upcoming') {
+        renderUpcomingGrid(userRegistrations);
+        renderFeaturedEvent(userRegistrations);
+    } else if (currentActiveTab === 'registered') {
+        renderRegisteredGrid(userRegistrations);
+    }
+}
+
+function updateTabCounts(registrations) {
+    const upcomingCount = _events.filter(isApprovedEvent).length;
+    const tabUpcoming   = document.querySelector('.tab-btn[onclick*="upcoming"] .tab-count');
+    const tabReg        = document.querySelector('.tab-btn[onclick*="registered"] .tab-count');
+    if (tabUpcoming) tabUpcoming.textContent = upcomingCount;
+    if (tabReg)      tabReg.textContent      = registrations.length;
+}
+
+function renderUpcomingGrid(registrations) {
+    const grid = document.getElementById('upcomingGrid');
+    if (!grid) return;
+
+    const filtered = _events.filter(e => {
+        if (!isApprovedEvent(e)) return false;
+        if (activeFilter === 'all events') return true;
+        return (e.type || '').toLowerCase().includes(activeFilter.toLowerCase());
+    });
+
+    const subHeader = document.querySelector('#tab-upcoming .section-sub');
+    if (subHeader) subHeader.textContent = `${filtered.length} events across your communities`;
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `<div class="empty-state">No events found matching "${activeFilter}".</div>`;
+        return;
     }
 
-    console.log(
-      "[EVENTS] Create Event permissions restricted for audience user",
+    grid.innerHTML = filtered.map((ev, i) => generateEventCard(ev, registrations, i)).join('');
+}
+
+function renderRegisteredGrid(registrations) {
+    const grid = document.getElementById('regGrid');
+    if (!grid) return;
+
+    const filtered = _events.filter(e => registrations.includes(String(e.id)));
+
+    const subHeader = document.getElementById('reg-sub-header');
+    if (subHeader) subHeader.textContent = `${filtered.length} upcoming events you're registered for`;
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:60px 20px">
+            <div style="font-size:40px;margin-bottom:10px">🎟</div>
+            <h3>No registrations yet</h3>
+            <p>Explore upcoming events and register to see them here.</p>
+            <button class="btn-primary" style="margin-top:15px" onclick="switchTab('upcoming',document.querySelector('.tab-btn'))">Browse Events</button>
+        </div>`;
+        return;
+    }
+
+    grid.innerHTML = filtered.map((ev, i) => generateRegCard(ev, i)).join('');
+}
+
+function renderFeaturedEvent(registrations) {
+    const featured = _events.find(e => e.isFeatured && isApprovedEvent(e)) || _events.find(isApprovedEvent);
+    const featuredEl = document.querySelector('.featured-event');
+    if (!featured) {
+        if (featuredEl) featuredEl.style.display = 'none';
+        return;
+    }
+    if (featuredEl) featuredEl.style.display = '';
+
+    const isRegistered = registrations.includes(String(featured.id));
+    const featuredAttendees = featured.attendees || 0;
+    const featuredCapacity = featured.maxAttendees || featured.capacity || null;
+    const isFull = featuredCapacity && featuredAttendees >= featuredCapacity;
+
+    const featTitle    = document.querySelector('.feat-title');
+    const featDesc     = document.querySelector('.feat-desc');
+    const seatsLeft    = document.querySelector('.seats-left');
+    const featBtn      = document.getElementById('featured-register');
+    const attendeeCount = document.querySelector('.attendee-count');
+
+    if (featTitle)     featTitle.textContent     = featured.title;
+    if (featDesc)      featDesc.textContent       = featured.description;
+    if (seatsLeft) {
+        seatsLeft.textContent = featuredCapacity
+            ? (isFull ? 'Event Full' : `⚡ ${featuredCapacity - featuredAttendees} seats left`)
+            : 'Open registration';
+    }
+    if (attendeeCount) attendeeCount.textContent  = `${featuredAttendees} people registered`;
+
+    if (featBtn) {
+        featBtn.textContent = isRegistered ? '✓ Registered' : (isFull ? 'Event Full' : 'Register Now');
+        featBtn.className   = `btn-register ${isRegistered ? 'registered' : ''}`;
+        featBtn.disabled    = isFull && !isRegistered;
+        featBtn.onclick     = () => handleRegistrationToggle(featured.id);
+    }
+}
+
+function getComm(communityId) {
+    const key = String(communityId || '');
+    const found = _communities.find(c =>
+        String(c.id) === key || String(c.slug || '') === key || String(c.name || '').toLowerCase() === key.toLowerCase()
     );
-  }
+    if (found) return found;
+    return _communities.find(c => c.id === communityId) || { name: 'Unknown', icon: '🎮' };
 }
 
-// ==========================================
-// 2. TAB & VIEW NAVIGATION
-// ==========================================
+function generateEventCard(ev, registrations, index) {
+    const comm       = getComm(ev.communityId);
+    const isRegistered = registrations.includes(String(ev.id));
+    const date       = new Date(ev.date);
+    const day        = date.getDate().toString().padStart(2, '0');
+    const month      = date.toLocaleString('en-US', { month: 'short' });
+    const attendees  = ev.attendees || 0;
+    const capacity   = ev.maxAttendees || ev.capacity || null;
+    const isFull     = capacity && attendees >= capacity;
+    const seatsLabel = capacity ? `âš¡ ${capacity - attendees} seats left` : 'Open registration';
+    ev.attendees = attendees;
+    ev.maxAttendees = capacity || attendees;
 
-/**
- * Switches between Upcoming, Registered, and Create views
- */
-window.switchTab = function (name, btn) {
-  // UI: Tab Buttons
-  document
-    .querySelectorAll(".tab-btn")
-    .forEach((b) => b.classList.remove("active"));
-  btn.classList.add("active");
-
-  // UI: Content Areas
-  document
-    .querySelectorAll(".content")
-    .forEach((c) => c.classList.remove("active"));
-  const targetContent = document.getElementById("tab-" + name);
-  if (targetContent) {
-    targetContent.classList.add("active");
-  }
-
-  currentActiveTab = name;
-  console.log(`Switched to Events tab: ${name}`);
-};
-
-// ==========================================
-// 3. FILTERING & DISCOVERY
-// ==========================================
-
-/**
- * Toggles category chips and filters the events grid
- */
-window.toggleChip = function (el) {
-  document
-    .querySelectorAll(".filter-chip")
-    .forEach((c) => c.classList.remove("on"));
-  el.classList.add("on");
-
-  const category = el.textContent.toLowerCase().replace("✦ ", "");
-  activeFilter = category;
-
-  filterEventGrid(category);
-};
-
-/**
- * Logic to show/hide event cards based on selected filter
- */
-function filterEventGrid(filter) {
-  const cards = document.querySelectorAll(".ev-card");
-  let visibleCount = 0;
-  let shownCount = 0;
-
-  cards.forEach((card) => {
-    const title = card
-      .querySelector(".ev-card-title")
-      .textContent.toLowerCase();
-    const meta = card.querySelector(".ev-card-meta").textContent.toLowerCase();
-
-    // Simple keyword matching for the prototype
-    const isMatch =
-      filter === "all events" ||
-      title.includes(filter) ||
-      meta.includes(filter);
-
-    const shouldShow =
-      isMatch && (upcomingExpanded || shownCount < UPCOMING_INITIAL_VISIBLE);
-    card.style.display = shouldShow ? "flex" : "none";
-    if (shouldShow) {
-      visibleCount++;
-      shownCount++;
-    }
-  });
-
-  // Update sub-header text
-  const subHeader = document.querySelector("#tab-upcoming .section-sub");
-  const total = document.querySelectorAll(".events-grid .ev-card").length;
-  if (subHeader) {
-    subHeader.textContent = `${visibleCount} of ${total} events found for "${filter}"`;
-  }
-
-  // update load-more button label
-  const moreBtn = document.getElementById("load-more-events-btn");
-  if (moreBtn) {
-    const hiddenCount = Math.max(0, total - visibleCount);
-    moreBtn.textContent =
-      hiddenCount > 0 ? `Load more (${hiddenCount})` : "Show less";
-  }
-}
-
-const UPCOMING_INITIAL_VISIBLE = 4;
-let upcomingExpanded = false;
-
-function updateUpcomingVisibility() {
-  const cards = document.querySelectorAll(".events-grid .ev-card");
-  const total = cards.length;
-  let visibleCount = 0;
-
-  cards.forEach((card, idx) => {
-    const isVisible = upcomingExpanded || idx < UPCOMING_INITIAL_VISIBLE;
-    card.style.display = isVisible ? "flex" : "none";
-    if (isVisible) visibleCount++;
-  });
-
-  const subHeader = document.querySelector("#tab-upcoming .section-sub");
-  if (subHeader) {
-    subHeader.textContent = `${visibleCount} of ${total} events across your communities`;
-  }
-
-  const moreBtn = document.getElementById("load-more-events-btn");
-  if (moreBtn) {
-    if (total <= UPCOMING_INITIAL_VISIBLE) {
-      moreBtn.style.display = "none";
-    } else {
-      moreBtn.style.display = "block";
-      moreBtn.textContent = upcomingExpanded
-        ? "Show less"
-        : `Load more (${total - visibleCount})`;
-    }
-  }
-}
-
-window.toggleLoadMoreEvents = function () {
-  upcomingExpanded = !upcomingExpanded;
-  updateUpcomingVisibility();
-};
-
-// ==========================================
-// 3.5 DYNAMIC EVENTS LOADING
-// ==========================================
-
-function loadEventsFromStorage() {
-  return JSON.parse(localStorage.getItem(COMMUNITY_EVENTS_STORAGE_KEY) || "[]");
-}
-
-function renderDynamicEvents() {
-  const events = loadEventsFromStorage();
-  const communities = JSON.parse(
-    localStorage.getItem("nexus_communities") || "[]",
-  );
-  const eventsGrid = document.querySelector(".events-grid");
-  if (!eventsGrid) return;
-
-  // Add dynamic events to the grid
-  events.forEach((event, index) => {
-    const community = communities.find((c) => c.id === event.communityId) || {};
-    const eventCard = document.createElement("div");
-    eventCard.className = "ev-card delay-dynamic";
-    eventCard.setAttribute("data-event-id", event.id);
-    eventCard.innerHTML = `
-            <div class="ev-card-banner" style="background: linear-gradient(135deg, var(--accent), var(--bg-card));">
-                <div class="ev-card-banner-inner">${community.emoji || "📅"}</div>
+    return `
+        <div class="ev-card delay-${(index % 10) * 5}">
+            <div class="ev-card-banner" style="background:linear-gradient(135deg,var(--accent),var(--bg-surface))">
+                <div class="ev-card-banner-inner">${comm.icon}</div>
                 <div class="ev-card-badges">
-                    <span class="ev-badge badge-online">${event.location || "Online"}</span>
+                    <span class="ev-badge badge-online">${ev.type || 'event'}</span>
                 </div>
             </div>
             <div class="ev-card-body">
                 <div class="ev-card-top">
                     <div class="ev-date-box">
-                        <div class="ev-date-mon">${event.month || "TBD"}</div>
-                        <div class="ev-date-day">${event.day || ""}</div>
+                        <div class="ev-date-mon">${month}</div>
+                        <div class="ev-date-day">${day}</div>
                     </div>
                     <div>
-                        <div class="ev-card-title">${event.title}</div>
+                        <div class="ev-card-title">${ev.title}</div>
                         <div class="ev-card-comm">
-                            <div class="ev-comm-av">${community.emoji || "⚡"}</div>
-                            <div class="ev-comm-name">${community.name || "Community"}</div>
+                            <div class="ev-comm-av">${comm.icon}</div>
+                            <div class="ev-comm-name">${comm.name}</div>
                         </div>
                     </div>
                 </div>
                 <div class="ev-card-meta">
-                    <div class="ev-meta-tag">⏰ ${event.time || "TBD"}</div>
-                    <div class="ev-meta-tag">${event.location || "🌐 Online"}</div>
-                    <div class="ev-meta-tag">${event.description || "🎉 Event"}</div>
+                    <div class="ev-meta-tag">⏰ ${ev.time || '—'}</div>
+                    <div class="ev-meta-tag">👤 ${attendees} / ${capacity || '∞'}</div>
+                    <div class="ev-meta-tag">${ev.type || 'Event'}</div>
                 </div>
                 <div class="ev-card-footer">
-                    <div class="ev-attendees">👥 0 going</div>
-                    <button class="btn-ev" onclick="toggleReg(this)">Register</button>
+                    <div class="ev-attendees">${isFull ? '🚫 Event Full' : seatsLabel}</div>
+                    <div class="ev-actions">
+                        <button class="btn-ev" onclick="viewEvent(${ev.id})">View</button>
+                        <button class="btn-register ${isRegistered ? 'registered' : ''}" onclick="handleRegistrationToggle(${ev.id})">
+                            ${isRegistered ? 'Registered' : 'Register Now'}
+                        </button>
+                        ${isSystemAdmin() ? `<button class="btn-delete-event" onclick="deleteEvent(${ev.id})" title="Delete">🗑️</button>` : ''}
+                    </div>
                 </div>
             </div>
-        `;
-    eventsGrid.appendChild(eventCard);
-  });
-
-  // Update visibility and counts
-  updateUpcomingVisibility();
-}
-
-// ==========================================
-// 4. REGISTRATION LOGIC
-// ==========================================
-
-function getEventDataFromCard(card) {
-  const title =
-    card.querySelector(".ev-card-title")?.textContent || "Untitled Event";
-  const month = card.querySelector(".ev-date-mon")?.textContent || "";
-  const day = card.querySelector(".ev-date-day")?.textContent || "";
-  const date = month && day ? `${month} ${day}` : "";
-  const timeTag = Array.from(card.querySelectorAll(".ev-meta-tag")).find((t) =>
-    t.textContent.includes("⏰"),
-  );
-  const time = timeTag ? timeTag.textContent.replace("⏰ ", "") : "";
-  const community = card.querySelector(".ev-comm-name")?.textContent || "";
-  const typeTag = Array.from(card.querySelectorAll(".ev-meta-tag")).find(
-    (t) =>
-      t.textContent.includes("🌐") ||
-      t.textContent.includes("📍") ||
-      t.textContent.includes("🔀"),
-  );
-  const type = typeTag ? typeTag.textContent : "";
-  const categoryTag = Array.from(card.querySelectorAll(".ev-meta-tag")).find(
-    (t) =>
-      !t.textContent.includes("⏰") &&
-      !t.textContent.includes("📍") &&
-      !t.textContent.includes("🌐") &&
-      !t.textContent.includes("🔀"),
-  );
-  const category = categoryTag ? categoryTag.textContent : "";
-  return { title, date, time, community, type, category };
-}
-
-function addToMyRegistrations(eventData) {
-  const regList = document.querySelector(".reg-list");
-  if (!regList) return;
-
-  const exists = Array.from(regList.querySelectorAll(".reg-card")).find(
-    (card) => card.querySelector(".reg-title")?.textContent === eventData.title,
-  );
-  if (exists) return;
-
-  const [month, day] = eventData.date.split(" ");
-  const regCard = document.createElement("div");
-  regCard.className = "reg-card";
-  regCard.innerHTML = `
-        <div class="reg-date-box"><div class="reg-mon">${month || ""}</div><div class="reg-day">${day || ""}</div></div>
-        <div class="reg-info">
-            <div class="reg-title">${eventData.title}</div>
-            <div class="reg-meta">
-                <div class="reg-meta-item">⏰ ${eventData.time}</div>
-                <div class="reg-meta-item">${eventData.type || "🌐 Online"}</div>
-                <div class="reg-meta-item">${eventData.community || "⚡ Pro Gamers"}</div>
-                <div class="reg-meta-item">${eventData.category || "🏆"}</div>
-            </div>
-            <div class="reg-status-row">
-                <span class="reg-status status-confirmed">✓ Confirmed</span>
-                <span class="ticket-id">TKT-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Date.now().toString().slice(-6)}</span>
-            </div>
-        </div>
-        <div class="reg-actions">
-            <button class="btn-add-cal">📅 Add to Calendar</button>
-            <button class="btn-cancel">Cancel</button>
         </div>
     `;
-  regList.insertBefore(regCard, regList.firstChild);
-  updateRegistrationCount();
 }
 
-function removeFromMyRegistrations(title) {
-  const regList = document.querySelector(".reg-list");
-  if (!regList) return;
-  const exists = Array.from(regList.querySelectorAll(".reg-card")).find(
-    (card) => card.querySelector(".reg-title")?.textContent === title,
-  );
-  if (exists) {
-    exists.remove();
-    updateRegistrationCount();
-  }
+function generateRegCard(ev, index) {
+    const comm = getComm(ev.communityId);
+    const date = new Date(ev.date);
+
+    return `
+        <div class="reg-card delay-${(index % 10) * 5}">
+            <div class="reg-card-banner" style="background:linear-gradient(135deg,var(--bg-card),var(--accent-low))">
+                <div class="reg-card-banner-inner">🎟</div>
+            </div>
+            <div class="reg-card-body">
+                <div class="reg-card-top">
+                    <div class="reg-date-box">
+                        <div class="reg-mon">${date.toLocaleString('en-US', { month: 'short' })}</div>
+                        <div class="reg-day">${date.getDate()}</div>
+                    </div>
+                    <div>
+                        <div class="reg-title">${ev.title}</div>
+                        <div class="reg-comm">
+                            <div class="reg-comm-av">${comm.icon}</div>
+                            <div class="reg-comm-name">${comm.name}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="reg-meta">
+                    <div class="reg-meta-item">⏰ ${ev.time || '—'}</div>
+                    <div class="reg-meta-item">${ev.type || 'Event'}</div>
+                </div>
+                <div class="reg-status-row">
+                    <span class="reg-status status-confirmed">✓ Confirmed</span>
+                    <span class="ticket-id">TKT-${String(ev.id).padStart(6, '0')}</span>
+                </div>
+                <div class="reg-card-footer">
+                    <div class="ev-attendees">👥 ${ev.attendees || 0} attending</div>
+                    <div class="reg-actions">
+                        <button class="btn-cancel" onclick="handleRegistrationToggle(${ev.id})">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
-function updateRegistrationCount() {
-  const count = document.querySelectorAll(".reg-list .reg-card").length;
-  const tabButton = Array.from(document.querySelectorAll(".tab-btn")).find(
-    (btn) => btn.textContent.includes("My Registrations"),
-  );
-  if (tabButton) {
-    const span = tabButton.querySelector(".tab-count");
-    if (span) {
-      span.textContent = count;
+// ── Actions ───────────────────────────────────────────────────────────────────
+window.handleRegistrationToggle = async function (eventId) {
+    let registrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
+    const id = String(eventId);
+    const isRegistered = registrations.includes(id);
+    const event = _events.find(e => String(e.id) === id);
+    if (!event) return;
+    const userId = await resolveCurrentUserId();
+
+    if (isRegistered) {
+        const registration = _eventRegistrations.find(item => String(item.eventId) === id && Number(item.userId) === Number(userId));
+        if (registration) {
+            await window.API.eventRegistrations.delete(registration.id);
+            _eventRegistrations = _eventRegistrations.filter(item => item.id !== registration.id);
+        }
+        event.attendees = Math.max(0, (event.attendees || 0) - 1);
+        registrations = registrations.filter(r => r !== id);
+        if (window.toast) window.toast(`Unregistered from ${event.title}`);
+    } else {
+        if (event.maxAttendees && event.attendees >= event.maxAttendees) {
+            if (window.toast) window.toast('Cannot register — Event is full!', 'error');
+            return;
+        }
+        const created = await window.API.eventRegistrations.create({ eventId: Number(eventId), userId });
+        _eventRegistrations.push(created);
+        event.attendees = (event.attendees || 0) + 1;
+        registrations.push(id);
+        if (window.toast) window.toast(`Registered for ${event.title}! 🎟`);
     }
-  }
-}
 
-/**
- * Toggles the registration state of an event card
- */
-window.toggleReg = function (btn) {
-  const isRegistered = btn.classList.contains("registered");
-  const card = btn.closest(".ev-card");
-  const cardTitle = card.querySelector(".ev-card-title")?.textContent || "";
-
-  if (isRegistered) {
-    btn.classList.remove("registered");
-    btn.textContent = "Register";
-    if (window.toast)
-      window.toast(`Unregistered from ${cardTitle.substring(0, 20)}...`);
-    removeFromMyRegistrations(cardTitle);
-  } else {
-    btn.classList.add("registered");
-    btn.textContent = "✓ Registered";
-    if (window.toast)
-      window.toast(
-        `Successfully registered for ${cardTitle.substring(0, 20)}! 🎟`,
-      );
-    const eventData = getEventDataFromCard(card);
-    addToMyRegistrations(eventData);
-  }
+    writeStoredEvents(_events);
+    try {
+        const refreshed = await window.API.events.getOne(eventId);
+        Object.assign(event, refreshed);
+    } catch (err) {}
+    localStorage.setItem('nexus_registered_events', JSON.stringify(registrations));
+    renderAll();
 };
 
-window.registerFeaturedEvent = function (btn) {
-  const featured = document.querySelector(".featured-event .feat-content");
-  if (!featured) return;
-
-  const title =
-    featured.querySelector(".feat-title")?.textContent ||
-    "March Hack Sprint 2025";
-  const dateText =
-    featured.querySelector(".feat-meta-item")?.textContent ||
-    "March 7 – 8, 2025";
-  const timeText =
-    featured.querySelector(".feat-meta-item:nth-child(2)")?.textContent ||
-    "Starts 2:00 PM IST";
-  const typeText =
-    featured.querySelector(".feat-badge-row .ev-badge")?.textContent ||
-    "🌐 Online";
-
-  const eventData = {
-    title,
-    date: dateText.replace("🗓 ", ""),
-    time: timeText.replace("⏰ ", ""),
-    community:
-      featured
-        .querySelector(".feat-community .feat-comm-name")
-        ?.textContent.replace("Hosted by ", "") || "Pro Gamers",
-    type: typeText,
-    category: "🏆 Hackathon",
-  };
-
-  if (!btn.classList.contains("registered")) {
-    btn.classList.add("registered");
-    btn.textContent = "✓ Registered";
-    addToMyRegistrations(eventData);
-    if (window.toast) window.toast(`Successfully registered for ${title}! 🎟`);
-  } else {
-    btn.classList.remove("registered");
-    btn.textContent = "Register Now";
-    removeFromMyRegistrations(title);
-    if (window.toast) window.toast(`Registration canceled for ${title}.`);
-  }
+window.deleteEvent = async function (eventId) {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+    try {
+        await window.API.events.delete(eventId);
+        _events = _events.filter(e => e.id !== eventId);
+        writeStoredEvents(_events);
+        if (window.toast) window.toast('Event deleted. 🗑️');
+        renderAll();
+    } catch (err) {
+        if (window.toast) window.toast('Error deleting event: ' + err.message, 'error');
+    }
 };
 
-function cancelRegistration(el) {
-  const regCard = el.closest(".reg-card");
-  if (!regCard) return;
+// ── Create Event ──────────────────────────────────────────────────────────────
+function initForm() {
+    const form = document.getElementById('createEventForm');
+    if (!form) return;
 
-  const title = regCard.querySelector(".reg-title")?.textContent || "";
-  if (window.toast) window.toast(`Registration canceled for ${title}.`);
-  regCard.remove();
-  updateRegistrationCount();
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        handleEventSubmit();
+    });
 
-  // Reflect state in event list if matching card exists
-  const eventCard = Array.from(document.querySelectorAll(".ev-card")).find(
-    (c) => c.querySelector(".ev-card-title")?.textContent === title,
-  );
-  if (eventCard) {
-    const btn = eventCard.querySelector(".btn-ev");
-    if (btn) {
-      btn.classList.remove("registered");
-      btn.textContent = "Register";
-    }
-  }
+    form.querySelectorAll('input, textarea, select').forEach(field => {
+        field.addEventListener('input', () => {
+            field.classList.remove('field-error');
+            const errEl = document.getElementById('err-' + field.id.replace('ev', '').toLowerCase());
+            if (errEl) { errEl.classList.remove('show'); errEl.textContent = ''; }
+        });
+    });
 }
 
-function addToCalendar(el) {
-  const regCard = el.closest(".reg-card");
-  if (!regCard) return;
+function validateForm() {
+    const titleEl = document.getElementById('evTitle');
+    const descEl  = document.getElementById('evDesc');
+    const dateEl  = document.getElementById('evDate');
+    const timeEl  = document.getElementById('evTime');
+    const maxEl   = document.getElementById('evMax');
+    const commEl  = document.getElementById('evCommunity');
+    const categoryEl = document.getElementById('evCategory');
 
-  const title =
-    regCard.querySelector(".reg-title")?.textContent || "Gameunity Event";
-  const timeLine =
-    regCard.querySelector(".reg-meta .reg-meta-item")?.textContent || "";
-  const dateText =
-    regCard.querySelector(".reg-date-box .reg-mon")?.textContent +
-    " " +
-    regCard.querySelector(".reg-date-box .reg-day")?.textContent;
+    const title   = titleEl.value.trim();
+    const desc    = descEl.value.trim();
+    const date    = dateEl.value;
+    const time    = timeEl.value;
+    const max     = parseInt(maxEl.value);
+    const commId  = commEl.value;
+    const category = categoryEl.value;
 
-  // Attempt simple date-time parse
-  const timeMatch = timeLine.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
-  const timeStr = timeMatch ? timeMatch[1] : "17:00";
-  const monthMap = {
-    Jan: 1,
-    Feb: 2,
-    Mar: 3,
-    Apr: 4,
-    May: 5,
-    Jun: 6,
-    Jul: 7,
-    Aug: 8,
-    Sep: 9,
-    Oct: 10,
-    Nov: 11,
-    Dec: 12,
-  };
-  const [mon, day] = (dateText || "").split(" ");
-  const year = new Date().getFullYear();
+    let isValid   = true;
 
-  let startDate, endDate;
-  if (monthMap[mon] && day) {
-    const dateString = `${year}-${String(monthMap[mon]).padStart(2, "0")}-${String(day).padStart(2, "0")} ${timeStr}`;
-    startDate = new Date(dateString);
-    if (isNaN(startDate)) {
-      startDate = new Date();
+    document.querySelectorAll('.error-msg').forEach(e => { e.textContent = ''; e.classList.remove('show'); });
+    document.querySelectorAll('.field-error').forEach(e => e.classList.remove('field-error'));
+
+    const showError = (el, msg, errId) => {
+        const errEl = document.getElementById(errId);
+        if (errEl) { errEl.textContent = msg; errEl.classList.add('show'); }
+        if (el) el.classList.add('field-error');
+        isValid = false;
+    };
+
+    if (!title) showError(titleEl, 'Title is required', 'err-title');
+    if (!desc || desc.length < 10) showError(descEl, 'Minimum 10 characters required', 'err-desc');
+    if (!date) showError(dateEl, 'Date required', 'err-date');
+    else {
+        const sel = new Date(date);
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (sel < today) showError(dateEl, 'Select a valid future date', 'err-date');
     }
-  } else {
-    startDate = new Date();
-  }
-  endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    if (!time) showError(timeEl, 'Time required', 'err-time');
+    if (!max || max < 1) showError(maxEl, 'Invalid capacity', 'err-max');
+    if (!commId) showError(commEl, 'Community is required', 'err-community');
+    if (!category) showError(categoryEl, 'Category is required', 'err-category');
 
-  const toYmd = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
-  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${toYmd(startDate)}/${toYmd(endDate)}&details=${encodeURIComponent("Added via Gameunity event manager")}`;
+    if (!isValid) {
+        if (window.toast) window.toast('Please correct the highlighted fields.', 'error');
+        document.querySelector('.field-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
 
-  window.open(googleUrl, "_blank");
+    return true;
 }
 
-// Attach click handling for dynamic and static row buttons
-document.addEventListener("click", function (e) {
-  if (e.target.closest(".btn-add-cal")) {
-    e.preventDefault();
-    addToCalendar(e.target.closest(".btn-add-cal"));
-    return;
-  }
+async function handleEventSubmit() {
+    if (!validateForm()) return;
 
-  if (e.target.closest(".btn-cancel")) {
-    e.preventDefault();
-    cancelRegistration(e.target.closest(".btn-cancel"));
-    return;
-  }
-});
+    const titleEl = document.getElementById('evTitle');
+    const descEl  = document.getElementById('evDesc');
+    const dateEl  = document.getElementById('evDate');
+    const timeEl  = document.getElementById('evTime');
+    const maxEl   = document.getElementById('evMax');
+    const commEl  = document.getElementById('evCommunity');
+    const categoryEl = document.getElementById('evCategory');
 
-// ==========================================
-// 5. EVENT CREATION WIZARD
-// ==========================================
+    try {
+        const created = await window.API.events.create({
+            title: titleEl.value.trim(),
+            description: descEl.value.trim(),
+            date: dateEl.value,
+            time: timeEl.value,
+            communityId: Number(commEl.value),
+            maxAttendees: Number(maxEl.value),
+            category: categoryEl.value,
+            type: selectedEventType,
+            status: canApproveEvents() ? 'approved' : 'pending',
+            attendees: 0,
+            createdBy: (typeof getCurrentUser === 'function' ? getCurrentUser()?.username : null) || 'user',
+            coverImage: window.currentEventCover || ''
+        });
+        _events.push(created);
+        writeStoredEvents(_events);
+        if (window.toast) {
+            window.toast(`"${titleEl.value.trim()}" submitted for manager approval.`);
+        }
+        else alert('Event sent for approval');
+        resetForm();
+        const btn = document.querySelector('.tab-btn[onclick*="upcoming"]');
+        switchTab('upcoming', btn || document.querySelector('.tab-btn'));
+        renderAll();
+    } catch (err) {
+        if (window.toast) window.toast('Could not create event: ' + err.message, 'error');
+    }
+}
+
+function resetForm() {
+    const form = document.getElementById('createEventForm');
+    if (form) form.reset();
+    window.currentEventCover = '';
+    const uploadPreview = document.getElementById('uploadPreview');
+    const uploadDefault = document.getElementById('uploadDefault');
+    if (uploadPreview) {
+        uploadPreview.style.display = 'none';
+        uploadPreview.innerHTML = '';
+    }
+    if (uploadDefault) uploadDefault.style.display = '';
+    updatePreview();
+}
+
+window.handleImageUpload = function (input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = event => {
+        window.currentEventCover = event.target.result;
+        const uploadPreview = document.getElementById('uploadPreview');
+        const uploadDefault = document.getElementById('uploadDefault');
+        if (uploadPreview) {
+            uploadPreview.innerHTML = `<img src="${event.target.result}" alt="Event cover preview">`;
+            uploadPreview.style.display = 'block';
+        }
+        if (uploadDefault) uploadDefault.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+};
+
+window.saveDraft = function () {
+    const drafts = JSON.parse(localStorage.getItem('eventDrafts') || '[]');
+    drafts.push({
+        id: Date.now(),
+        title: document.getElementById('evTitle')?.value.trim() || '',
+        description: document.getElementById('evDesc')?.value.trim() || '',
+        date: document.getElementById('evDate')?.value || '',
+        time: document.getElementById('evTime')?.value || '',
+        communityId: document.getElementById('evCommunity')?.value || '',
+        capacity: Number(document.getElementById('evMax')?.value || 0),
+        category: document.getElementById('evCategory')?.value || '',
+        type: selectedEventType,
+        coverImage: window.currentEventCover || '',
+        status: 'draft'
+    });
+    localStorage.setItem('eventDrafts', JSON.stringify(drafts));
+    if (window.toast) window.toast('Draft saved locally.');
+};
+
+function renderRoleControls() {
+    const publishBtn = document.getElementById('publishEventBtn');
+    if (publishBtn) publishBtn.textContent = 'Request Event';
+}
+
+function renderLegacyApprovalPanel() {
+    const panel = null;
+    const list = null;
+    if (!panel || !list) return;
+
+    panel.style.display = canApproveEvents() ? 'block' : 'none';
+    if (!canApproveEvents()) return;
+
+    const pending = _events.filter(event => event.status === 'pending');
+    if (!pending.length) {
+        list.innerHTML = `<div class="empty-state">No pending event requests.</div>`;
+        return;
+    }
+
+    list.innerHTML = pending.map(event => {
+        const comm = getComm(event.communityId);
+        return `
+            <div class="approval-item">
+                <div>
+                    <div class="approval-title">${event.title}</div>
+                    <div class="approval-meta">${comm.name} · ${event.date} ${event.time || ''} · requested by ${event.createdBy || 'User'}</div>
+                    <div class="approval-meta">${event.description || ''}</div>
+                </div>
+                <div class="approval-actions">
+                    <button class="btn-approve" onclick="approveEvent(${event.id})">Approve</button>
+                    <button class="btn-reject" onclick="rejectEvent(${event.id})">Reject</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+async function updateEventStatus(eventId, status) {
+    if (!canApproveEvents()) {
+        if (window.toast) window.toast('Only Community Managers or Admins can approve events.', 'error');
+        return;
+    }
+
+    const event = _events.find(item => Number(item.id) === Number(eventId));
+    if (!event) return;
+
+    event.status = status;
+    writeStoredEvents(_events);
+    if (window.toast) window.toast(`Event ${status}.`);
+    renderAll();
+}
+
+async function validateAndSubmit() {
+    handleEventSubmit();
+}
+
+window.approveEvent = function (eventId) {
+    updateEventStatus(eventId, 'approved');
+};
+
+window.rejectEvent = function (eventId) {
+    updateEventStatus(eventId, 'rejected');
+};
+
+function populateCommunityDropdown() {
+    const dropdown = document.getElementById('evCommunity');
+    if (!dropdown) return;
+    if (!_communities.length) {
+        _communities = [{ id: 'pro-gamers', name: 'Pro Gamers', icon: '⚡' }];
+    }
+    dropdown.innerHTML = _communities.map(c =>
+        `<option value="${c.id}">${c.icon || '🏘️'} ${c.name}</option>`
+    ).join('');
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+window.switchTab = function (name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-' + name)?.classList.add('active');
+    currentActiveTab = name;
+    renderAll();
+};
+
+window.toggleChip = function (el) {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('on'));
+    el.classList.add('on');
+    activeFilter = el.textContent.toLowerCase().replace('✦ ', '');
+    renderAll();
+};
 
 window.setType = function (el, type) {
-  document
-    .querySelectorAll(".type-opt")
-    .forEach((o) => o.classList.remove("on"));
-  el.classList.add("on");
-  updatePreview();
+    document.querySelectorAll('.type-opt').forEach(opt => opt.classList.remove('on'));
+    el.classList.add('on');
+    selectedEventType = type;
 };
 
-let selectedCoverImageFile = null;
-
-function showUploadPreview(file) {
-  const preview = document.getElementById("uploadPreview");
-  const uploadText = document.getElementById("uploadText");
-  const previewBanner = document.querySelector(".preview-banner");
-
-  if (!file) {
-    if (preview) preview.style.display = "none";
-    if (uploadText) uploadText.textContent = "Drag & drop or click to upload";
-    if (previewBanner) {
-      previewBanner.style.backgroundImage = "";
-      previewBanner.style.backgroundSize = "";
-      previewBanner.textContent = "📅";
-    }
-    return;
-  }
-
-  const url = URL.createObjectURL(file);
-  if (preview) {
-    preview.style.display = "block";
-    preview.innerHTML = `<div style="display:flex;align-items:center;gap:10px;"><img src="${url}" alt="Cover preview" style="max-width:72px;max-height:72px;border-radius:8px;object-fit:cover;"/><span>${file.name}</span></div>`;
-  }
-
-  if (uploadText) uploadText.textContent = file.name;
-  if (previewBanner) {
-    previewBanner.style.backgroundImage = `url('${url}')`;
-    previewBanner.style.backgroundSize = "cover";
-    previewBanner.style.backgroundPosition = "center";
-    previewBanner.textContent = "";
-  }
-}
-
-/**
- * Synchronizes form inputs with the live preview card
- */
 window.updatePreview = function () {
-  const titleInput = document.getElementById("evTitle");
-  const dateInput = document.getElementById("evDate");
-  const timeInput = document.getElementById("evTime");
+    const title   = document.getElementById('evTitle')?.value   || 'Your event title';
+    const date    = document.getElementById('evDate')?.value    || 'Select a date';
+    const time    = document.getElementById('evTime')?.value    || 'time';
+    const commId  = document.getElementById('evCommunity')?.value;
+    const comm    = _communities.find(c => c.id === commId) || { name: 'Community', icon: '🎮' };
 
-  const prevTitle = document.getElementById("prevTitle");
-  const prevDate = document.getElementById("prevDate");
-
-  if (prevTitle) {
-    prevTitle.textContent = titleInput.value || "Your event title";
-  }
-
-  if (dateInput && prevDate) {
-    const dateVal = dateInput.value;
-    const timeVal = timeInput.value;
-
-    if (dateVal) {
-      try {
-        const d = new Date(`${dateVal}T${timeVal || "00:00"}`);
-        const dateStr = d.toLocaleDateString("en-IN", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-        const timeStr = timeVal
-          ? ` · ⏰ ${d.toLocaleTimeString("en-IN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`
-          : "";
-
-        prevDate.textContent = `🗓 ${dateStr}${timeStr}`;
-      } catch (e) {
-        prevDate.textContent = "🗓 Invalid date selected";
-      }
-    } else {
-      prevDate.textContent = "🗓 Select a date and time";
-    }
-  }
+    const prevTitle = document.getElementById('prevTitle');
+    const prevDate  = document.getElementById('prevDate');
+    if (prevTitle) prevTitle.textContent = title;
+    if (prevDate)  prevDate.textContent  = `🗓 ${date} at ${time}`;
 };
 
-function buildEventCard(data) {
-  const { title, date, time, type, community, category, coverUrl } = data;
-  const eventDate = new Date(`${date}T${time}`);
-  const month = eventDate.toLocaleString("en-US", { month: "short" });
-  const day = eventDate.getDate();
-  const timeDisplay = eventDate.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.viewEvent = function (id) {
+    const events = readStoredEvents();
+    const event = events.find(ev => Number(ev.id) === Number(id));
+    if (!event) return;
 
-  const communityName = community.replace(/^\S+\s*/, "").trim();
-  const communityEmoji = community.split(" ")[0] || "⚡";
+    const comm = getComm(event.communityId);
+    const capacity = event.maxAttendees || event.capacity || 'Open';
 
-  const typeBadge =
-    {
-      Online: "🌐 Online",
-      "In-Person": "📍 In-Person",
-      Hybrid: "🔀 Hybrid",
-    }[type] || "🌐 Online";
+    document.getElementById('modalStatus').textContent = event.status || 'approved';
+    document.getElementById('modalTitle').textContent = event.title || 'Untitled Event';
+    document.getElementById('modalDesc').textContent = event.description || 'No description';
+    document.getElementById('modalDate').textContent = `Date: ${event.date || 'Not set'} ${event.time || ''}`;
+    document.getElementById('modalCommunity').textContent = `Community: ${comm.name}`;
+    document.getElementById('modalCapacity').textContent = `Capacity: ${capacity}`;
+    document.getElementById('modalCategory').textContent = `Category: ${event.category || event.type || 'Event'}`;
+    document.getElementById('eventModal').classList.remove('hidden');
+};
 
-  const card = document.createElement("div");
-  card.className = "ev-card";
-  card.innerHTML = `
-        <div class="ev-card-banner" style="background-image:url('${coverUrl}');background-size:cover;background-position:center;">
-            <div class="ev-card-badges"><span class="ev-badge badge-${type.toLowerCase().replace(/[^a-z]/g, "")}">${typeBadge}</span></div>
-        </div>
-        <div class="ev-card-body">
-            <div class="ev-card-top">
-                <div class="ev-date-box"><div class="ev-date-mon">${month}</div><div class="ev-date-day">${day}</div></div>
-                <div><div class="ev-card-title">${title}</div><div class="ev-card-comm"><div class="ev-comm-av">${communityEmoji}</div><div class="ev-comm-name">${communityName}</div></div></div>
-            </div>
-            <div class="ev-card-meta">
-                <div class="ev-meta-tag">⏰ ${timeDisplay} IST</div>
-                <div class="ev-meta-tag">${typeBadge}</div>
-                <div class="ev-meta-tag">${category}</div>
-            </div>
-            <div class="ev-card-footer">
-                <div class="ev-attendees">👥 0 going</div>
-                <button class="btn-ev" onclick="toggleReg(this)">Register</button>
-            </div>
-        </div>
-    `;
+window.closeModal = function () {
+    document.getElementById('eventModal')?.classList.add('hidden');
+};
 
-  return card;
-}
-
-function appendEventToUpcoming(data) {
-  const grid = document.querySelector(".events-grid");
-  if (!grid) return;
-  const newCard = buildEventCard(data);
-  grid.insertBefore(newCard, grid.firstChild);
-}
-
-function resetCreateForm() {
-  document.getElementById("evTitle").value = "";
-  document.querySelector("#tab-create textarea").value = "";
-  document.getElementById("evDate").value = "";
-  document.getElementById("evTime").value = "";
-  document.getElementById("evCommunity").selectedIndex = 0;
-  document.getElementById("evCategory").selectedIndex = 0;
-  document.getElementById("evMax").value = "";
-  selectedCoverImageFile = null;
-  showUploadPreview(null);
-  document.querySelector(".type-opt.on")?.classList.remove("on");
-  document.querySelector(".type-opt")?.classList.add("on");
-  updatePreview();
-}
-
-// ==========================================
-// 6. INITIALIZATION
-// ==========================================
-document.addEventListener("DOMContentLoaded", () => {
-  // Enforce role-based create event permissions
-  enforceCreateEventPermissions();
-
-  // Load and render dynamic events from localStorage
-  renderDynamicEvents();
-
-  // Check for event query parameter and scroll to it
-  const urlParams = new URLSearchParams(window.location.search);
-  const eventId = urlParams.get("event");
-  if (eventId) {
-    // Wait a bit for DOM to be fully rendered
-    setTimeout(() => {
-      const eventElement = document.querySelector(
-        `[data-event-id="${eventId}"]`,
-      );
-      if (eventElement) {
-        eventElement.scrollIntoView({ behavior: "smooth", block: "center" });
-        // Add a highlight effect
-        eventElement.style.boxShadow = "0 0 20px var(--accent)";
-        setTimeout(() => {
-          eventElement.style.boxShadow = "";
-        }, 3000);
-      }
-    }, 500);
-  }
-
-  // Set initial date in the form to today for convenience
-  const dateField = document.getElementById("evDate");
-  if (dateField) {
-    const today = new Date().toISOString().split("T")[0];
-    dateField.setAttribute("min", today);
-  }
-
-  updateUpcomingVisibility();
-
-  const uploadArea = document.getElementById("uploadArea");
-  const fileInput = document.getElementById("evCover");
-  const publishBtn = document.getElementById("publishEventBtn");
-
-  function preventDefault(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  if (uploadArea && fileInput) {
-    uploadArea.addEventListener("click", () => fileInput.click());
-
-    uploadArea.addEventListener("dragover", (event) => {
-      preventDefault(event);
-      uploadArea.classList.add("drag-over");
-    });
-
-    uploadArea.addEventListener("dragleave", (event) => {
-      preventDefault(event);
-      uploadArea.classList.remove("drag-over");
-    });
-
-    uploadArea.addEventListener("drop", (event) => {
-      preventDefault(event);
-      uploadArea.classList.remove("drag-over");
-      const file = event.dataTransfer.files[0];
-      if (file) {
-        selectedCoverImageFile = file;
-        showUploadPreview(file);
-      }
-    });
-
-    fileInput.addEventListener("change", (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        selectedCoverImageFile = file;
-        showUploadPreview(file);
-      }
-    });
-  }
-
-  if (publishBtn) {
-    publishBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-
-      const title = document.getElementById("evTitle").value.trim();
-      const date = document.getElementById("evDate").value;
-      const time = document.getElementById("evTime").value;
-
-      const missingFields = [];
-      if (!title) missingFields.push("Event title");
-      if (!date) missingFields.push("Date");
-      if (!time) missingFields.push("Time");
-      if (!selectedCoverImageFile) missingFields.push("Cover image");
-
-      if (missingFields.length > 0) {
-        const msg = `Please add: ${missingFields.join(", ")} before publishing.`;
-        if (window.toast) window.toast(msg, { type: "error" });
-        else alert(msg);
-        return;
-      }
-
-      publishBtn.textContent = "✓ Published!";
-      publishBtn.style.background = "linear-gradient(135deg,#34D399,#059669)";
-
-      const type =
-        document.querySelector(".type-opt.on")?.textContent.trim() || "Online";
-      const community =
-        document.getElementById("evCommunity")?.value || "⚡ Pro Gamers";
-      const category =
-        document.getElementById("evCategory")?.value || "🏆 Hackathon";
-      const coverUrl = selectedCoverImageFile
-        ? URL.createObjectURL(selectedCoverImageFile)
-        : "";
-
-      appendEventToUpcoming({
-        title,
-        date,
-        time,
-        type,
-        community,
-        category,
-        coverUrl,
-      });
-
-      if (window.toast) window.toast("Event published successfully! 🎉");
-
-      setTimeout(() => {
-        publishBtn.textContent = "Publish Event";
-        publishBtn.style.background = "";
-      }, 2500);
-
-      resetCreateForm();
-    });
-  }
-
-  // Keep live preview in sync as the user types / selects
-  ["evTitle", "evDate", "evTime"].forEach((id) => {
-    const input = document.getElementById(id);
-    if (input) input.addEventListener("input", updatePreview);
-  });
-
-  console.log("Events module initialized. Happy hosting! 📅");
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadData();
+    populateCommunityDropdown();
+    initForm();
+    renderAll();
+    console.log('%c[Events] %cLive backend data loaded.', 'color: #5B6EF5; font-weight: bold;', 'color: #10B981;');
 });

@@ -1,576 +1,277 @@
 /**
- * Gameunity — Community Page Interactive Logic
- * Handles tab switching, sidebar toggle, join button, chat interface, member search, etc.
+ * Se7enSquare — Community Page
+ * Fetches community data from GET /api/communities/:id and events from GET /api/events
  */
 
-const COMMUNITY_STORAGE_KEY = "nexus_communities";
-const CHANNEL_STORAGE_KEY = "nexus_channels";
-const JOIN_STATE_KEY = "nexus_join_state";
-const DEFAULT_COMMUNITY = "pro-gamers";
+let _comm   = null;
+let _events = [];
 
-const defaultCommunities = [
-  {
-    id: "pro-gamers",
-    emoji: "⚡",
-    name: "Pro Gamers",
-    grad: "grad-purple",
-    status: "bg-dot-green",
-  },
-  {
-    id: "rpg-tavern",
-    emoji: "🎨",
-    name: "RPG Tavern",
-    grad: "grad-orange",
-    status: "bg-dot-green",
-  },
-  {
-    id: "gamezone",
-    emoji: "🎮",
-    name: "GameZone",
-    grad: "grad-cyan",
-    status: "bg-dot-orange",
-  },
-  {
-    id: "fps-masters",
-    emoji: "🌿",
-    name: "FPS Masters",
-    grad: "grad-green",
-    status: "bg-dot-gray",
-  },
-  {
-    id: "speedrunners",
-    emoji: "🎵",
-    name: "SpeedRunners",
-    grad: "grad-pink",
-    status: "bg-dot-green",
-  },
-  {
-    id: "strategy-gods",
-    emoji: "📚",
-    name: "Strategy Gods",
-    grad: "grad-violet",
-    status: "bg-dot-gray",
-  },
-];
-
-const defaultChannels = [
-  {
-    group: "📢 Announcements",
-    name: "announcements",
-    icon: "📣",
-    subtitle: "Locked",
-    locked: true,
-    recent: "2h ago",
-    unread: 0,
-  },
-  {
-    group: "📢 Announcements",
-    name: "rules-and-info",
-    icon: "📌",
-    subtitle: "Locked",
-    locked: true,
-    recent: "1d ago",
-    unread: 0,
-  },
-  {
-    group: "💬 General",
-    name: "general",
-    icon: "#",
-    subtitle: "now",
-    unread: 12,
-  },
-  {
-    group: "💬 General",
-    name: "introductions",
-    icon: "#",
-    subtitle: "3h ago",
-    unread: 0,
-  },
-  {
-    group: "💬 General",
-    name: "off-topic",
-    icon: "#",
-    subtitle: "1h ago",
-    unread: 0,
-  },
-  {
-    group: "💻 Development",
-    name: "frontend",
-    icon: "#",
-    subtitle: "20m ago",
-    unread: 4,
-  },
-  {
-    group: "💻 Development",
-    name: "Strategy",
-    icon: "#",
-    subtitle: "45m ago",
-    unread: 0,
-  },
-  {
-    group: "💻 Development",
-    name: "Streaming",
-    icon: "#",
-    subtitle: "2h ago",
-    unread: 0,
-  },
-  {
-    group: "💻 Development",
-    name: "code-review",
-    icon: "#",
-    subtitle: "5m ago",
-    unread: 7,
-  },
-  {
-    group: "💻 Development",
-    name: "open-source",
-    icon: "#",
-    subtitle: "3h ago",
-    unread: 0,
-  },
-  {
-    group: "🎯 Career",
-    name: "job-board",
-    icon: "#",
-    subtitle: "30m ago",
-    unread: 0,
-  },
-  {
-    group: "🎯 Career",
-    name: "portfolio-review",
-    icon: "#",
-    subtitle: "1h ago",
-    unread: 0,
-  },
-  {
-    group: "🎯 Career",
-    name: "interview-prep",
-    icon: "#",
-    subtitle: "4h ago",
-    unread: 0,
-  },
-  {
-    group: "🎙 Voice",
-    name: "study-together",
-    icon: "🔊",
-    subtitle: "● 3 in voice",
-    unread: 0,
-  },
-  {
-    group: "🎙 Voice",
-    name: "pair-programming",
-    icon: "🔊",
-    subtitle: "Empty",
-    unread: 0,
-  },
-];
-
-function loadFromStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (e) {
-    console.warn("Storage parse failed", key, e);
-    return fallback;
-  }
+function getCommunityPageId() {
+    return new URLSearchParams(window.location.search).get('id');
 }
 
-function saveToStorage(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-}
+// ── Load from URL param ───────────────────────────────────────────────────────
+async function loadCommunityData() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
 
-function getCommunities() {
-  const stored = loadFromStorage(COMMUNITY_STORAGE_KEY, null);
-  return Array.isArray(stored) && stored.length ? stored : defaultCommunities;
-}
-
-function getChannels() {
-  const stored = loadFromStorage(CHANNEL_STORAGE_KEY, null);
-  return Array.isArray(stored) && stored.length ? stored : defaultChannels;
-}
-
-window.addCommunity = function (comm) {
-  const current = getCommunities();
-  const existing = current.find((c) => c.id === comm.id);
-  if (existing) return;
-  current.push(comm);
-  saveToStorage(COMMUNITY_STORAGE_KEY, current);
-  renderCommunityRail();
-};
-
-window.addChannel = function (channel) {
-  const current = getChannels();
-  const existing = current.find((c) => c.name === channel.name);
-  if (existing) return;
-  current.push(channel);
-  saveToStorage(CHANNEL_STORAGE_KEY, current);
-  renderChannels();
-};
-
-function renderCommunityRail() {
-  const rail = document.getElementById("railCommunities");
-  if (!rail) return;
-  const comms = getCommunities();
-  rail.innerHTML = "";
-
-  comms.forEach((comm) => {
-    const el = document.createElement("div");
-    el.className = `rail-item rail-comm ${comm.grad || "grad-purple"}`;
-    el.setAttribute("data-tooltip", comm.name);
-    el.innerHTML = `${comm.emoji}<div class="rail-dot ${comm.status || "bg-dot-green"}"></div>`;
-    el.onclick = () => {
-      // switch to community using URL for now
-      window.location.href = `community-page.html?name=${encodeURIComponent(comm.id)}`;
-    };
-    rail.appendChild(el);
-  });
-}
-
-function renderChannels() {
-  const container = document.getElementById("channelsList");
-  if (!container) return;
-  const channels = getChannels();
-  container.innerHTML = "";
-
-  let lastGroup = null;
-  channels.forEach((ch) => {
-    if (ch.group !== lastGroup) {
-      const title = document.createElement("div");
-      title.className = "ch-group-title";
-      title.textContent = ch.group;
-      container.appendChild(title);
-      lastGroup = ch.group;
+    if (!id) {
+        // Fallback: load first community
+        try {
+            const all = await window.API.communities.getAll();
+            _comm = all[0] || null;
+        } catch (e) { _comm = null; }
+    } else {
+        try {
+            _comm = await window.API.communities.getOne(id);
+        } catch (e) {
+            console.error('[CommunityPage] Could not load community id:', id, e);
+            _comm = null;
+        }
     }
 
-    const row = document.createElement("div");
-    row.className = "ch-row";
-    row.dataset.name = ch.name;
-
-    row.onclick = () => selectChannel(row, ch.name);
-    row.ondblclick = () => openChannel(ch.name);
-
-    row.innerHTML = `<span class='ch-icon'>${ch.icon}</span><span class='ch-name'>${ch.name}</span>${ch.unread ? `<span class='ch-unread'>${ch.unread}</span>` : ""}<span class='ch-meta'>${ch.subtitle}</span>`;
-    container.appendChild(row);
-  });
+    if (_comm) {
+        try {
+            const all = await window.API.events.getAll();
+            _events = all.filter(e =>
+                String(e.communityId) === String(_comm.id) &&
+                e.status === 'approved'
+            );
+        } catch (e) { _events = []; }
+    }
 }
 
-window.selectChannel = function (row, channelName) {
-  document
-    .querySelectorAll(".ch-row")
-    .forEach((r) => r.classList.remove("active-ch"));
-  if (row) row.classList.add("active-ch");
-  const clean = channelName.replace("#", "");
-  const activeCh = document.getElementById("activeCh");
-  const activeChDesc = document.getElementById("activeChDesc");
-  if (activeCh) activeCh.textContent = clean;
-  if (activeChDesc) {
-    const mapping = {
-      announcements: "All milestone and event updates live here.",
-      "rules-and-info": "Community guidelines and important notices.",
-      general:
-        "The main hub for all things Pro Gamers. Say hello, share updates, ask anything, or just vibe with the community.",
-      introductions: "New member intros and welcome messages.",
-      "off-topic": "Friendly chats, memes, and casual talk.",
-      frontend: "Front-end development discussions and code help.",
-      Strategy: "Strategies and tactics for design decisions.",
-      Streaming: "Streaming tips and setup help.",
-      "code-review": "Share code for review and feedback.",
-      "open-source": "Open-source project collaboration.",
-      "job-board": "Post and discover job opportunities.",
-      "portfolio-review": "Review your portfolio and get mentorship.",
-      "interview-prep": "Interview questions, mock sessions, and advice.",
-      "study-together": "Join others for coding sessions.",
-      "pair-programming": "Find a partner for pairing sessions.",
-    };
-    activeChDesc.textContent = mapping[clean] || "A community text channel.";
-  }
-};
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderCommunityData() {
+    if (!_comm) {
+        document.body.innerHTML += '<div style="padding:40px;text-align:center;color:var(--text-3)">Community not found.</div>';
+        return;
+    }
 
-window.openChannel = function (channelName) {
-  const clean = channelName.replace("#", "");
-  window.location.href = `chat.html?channel=${encodeURIComponent(clean)}`;
-};
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-window.toggleMainJoin = function () {
-  const btn = document.getElementById("joinMainBtn");
-  if (!btn) return;
-  const state = loadFromStorage(JOIN_STATE_KEY, {});
-  const joined = btn.classList.contains("joined");
+    set('comm-icon',         _comm.icon  || '🏘️');
+    set('comm-name-title',   _comm.name);
+    set('breadcrumbCommunityName', _comm.name);
+    set('comm-online-count', (_comm.onlineCount  || 0).toLocaleString());
+    set('comm-member-count', (_comm.memberCount  || 0).toLocaleString());
+    set('comm-category',     `💻 ${_comm.category || 'Gaming'} · Community`);
+    set('comm-description',  _comm.description);
+    set('stat-total-members', (_comm.memberCount  || 0).toLocaleString());
+    set('stat-online-now',   (_comm.onlineCount  || 0).toLocaleString());
 
-  if (joined) {
-    btn.classList.remove("joined");
-    btn.textContent = "+ Join Community";
-    btn.style.background =
-      "linear-gradient(135deg, var(--accent), var(--accent-hover))";
-    btn.style.color = "#fff";
-    state[DEFAULT_COMMUNITY] = false;
-  } else {
-    btn.classList.add("joined");
-    btn.textContent = "✓ Joined";
-    btn.style.background = "var(--success)";
-    btn.style.color = "#fff";
-    state[DEFAULT_COMMUNITY] = true;
-  }
+    const bigIcon = document.querySelector('.comm-big-icon');
+    if (bigIcon) bigIcon.textContent = _comm.icon || '🏘️';
 
-  saveToStorage(JOIN_STATE_KEY, state);
-};
+    document.querySelectorAll('.comm-name-text').forEach(el => el.textContent = _comm.name);
 
-function initJoinState() {
-  const btn = document.getElementById("joinMainBtn");
-  if (!btn) return;
-  const state = loadFromStorage(JOIN_STATE_KEY, {});
-  const joined = state[DEFAULT_COMMUNITY];
+    const founded = document.getElementById('comm-founded');
+    if (founded && _comm.createdAt) {
+        founded.textContent = `📅 Founded ${new Date(_comm.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+    }
 
-  if (joined) {
-    btn.classList.add("joined");
-    btn.textContent = "✓ Joined";
-    btn.style.background = "var(--success)";
-    btn.style.color = "#fff";
-  } else {
-    btn.classList.remove("joined");
-    btn.textContent = "+ Join Community";
-    btn.style.background =
-      "linear-gradient(135deg, var(--accent), var(--accent-hover))";
-    btn.style.color = "#fff";
-  }
+    // Channels count
+    const channelSource = (_comm.channels && _comm.channels.length > 0)
+        ? _comm.channels
+        : (_comm.tags || []);
+    const tabs = document.getElementById('tab-count-channels');
+    if (tabs) tabs.textContent = channelSource.length;
+    const tabMembers = document.getElementById('tab-count-members');
+    if (tabMembers) tabMembers.textContent = (_comm.memberCount || 0).toLocaleString();
+
+    // Use explicitly-created channels first, then fall back to tags
+    renderChannelsFromTags(channelSource);
+    renderCommunityEvents();
+    initJoinState(_comm.id);
+    initCommunityNavigation(_comm.id);
 }
 
-window.replyToMessage = function (btn) {
-  const group = btn.closest(".msg-group");
-  const author = group?.querySelector(".msg-uname")?.textContent || "Unknown";
-  const message = group?.querySelector(".msg-text")?.textContent || "";
-  const toast = document.createElement("div");
-  toast.className = "global-toast";
-  toast.textContent = `Replying to ${author}: "${message.slice(0, 60)}..."`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2300);
-};
+function renderChannelsFromTags(tags) {
+    const container = document.getElementById('channelsList');
+    if (!container) return;
 
-window.toggleReaction = function (btn, emoji) {
-  const was = btn.classList.contains("reacted");
-  btn.classList.toggle("reacted");
-  btn.textContent = was ? emoji : `✅ ${emoji}`;
-};
+    // Determine if current user is a member
+    const joinedIds = JSON.parse(localStorage.getItem('nexus_joined_communities') || '[]');
+    const isMember  = _comm ? joinedIds.includes(String(_comm.id)) : false;
 
-window.showMessageMenu = function (btn) {
-  document.querySelectorAll(".msg-context-menu").forEach((m) => m.remove());
-  const menu = document.createElement("div");
-  menu.className = "msg-context-menu";
-  menu.innerHTML = `
-        <div class='msg-menu-item' onclick='copyMessageText(this)'>📋 Copy Text</div>
-        <div class='msg-menu-item' onclick='pinMessage(this)'>📌 Pin Message</div>
-        <div class='msg-menu-item' onclick='reportMessage(this)'>🚩 Report</div>
-    `;
+    if (tags.length === 0) {
+        container.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-3);">No channels yet.</div>';
+        return;
+    }
 
-  btn.style.position = "relative";
-  btn.appendChild(menu);
-
-  setTimeout(() => {
-    document.addEventListener("click", function close(e) {
-      if (!menu.contains(e.target)) {
-        menu.remove();
-        document.removeEventListener("click", close);
-      }
+    const html = ['<div class="ch-group-title">💬 Channels</div>'];
+    tags.forEach(item => {
+        const chanName = typeof item === 'object' ? item.name : item;
+        const chanType = typeof item === 'object' && item.type === 'Voice' ? 'VC' : '#';
+        if (isMember) {
+            // Member: clickable channel
+            html.push(`
+                <div class="ch-row" onclick="selectChannel(this, '${chanName}', '${chanType}')">
+                    <span class='ch-icon'>${chanType}</span>
+                    <span class='ch-name'>${chanName}</span>
+                </div>
+            `);
+        } else {
+            // Non-member: locked channel — shows join prompt on click
+            html.push(`
+                <div class="ch-row ch-locked" onclick="showJoinPrompt()" title="Join to access">
+                    <span class='ch-icon'>🔒</span>
+                    <span class='ch-name'>${chanName}</span>
+                </div>
+            `);
+        }
     });
-  }, 10);
-};
 
-window.copyMessageText = function (node) {
-  const group = node.closest(".msg-group");
-  const text = group?.querySelector(".msg-text")?.textContent || "";
-  navigator.clipboard
-    .writeText(text)
-    .then(() => createToast("Message copied to clipboard!"));
-  node.closest(".msg-context-menu")?.remove();
-};
+    container.innerHTML = html.join('');
 
-window.pinMessage = function (node) {
-  createToast("Message pinned to channel!");
-  node.closest(".msg-context-menu")?.remove();
-};
-
-window.reportMessage = function (node) {
-  window.location.href = "report.html";
-};
-
-function createToast(message) {
-  const toast = document.createElement("div");
-  toast.className = "global-toast";
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
-}
-
-const COMMUNITY_EVENTS_STORAGE_KEY = "nexus_community_events";
-
-const defaultEvents = [
-  {
-    id: "e1",
-    title: "March Hack Sprint",
-    date: "Mar 7, 2:00 PM",
-    month: "Mar",
-    day: "07",
-    location: "Online",
-    status: "Open",
-    communityId: "pro-gamers",
-    createdBy: "gameMaster",
-    description: "Monthly hackathon for all developers.",
-  },
-  {
-    id: "e2",
-    title: "JS Deep Dive AMA",
-    date: "Mar 15, 6:00 PM",
-    month: "Mar",
-    day: "15",
-    location: "Online",
-    status: "Soon",
-    communityId: "pro-gamers",
-    createdBy: "Mia Park",
-    description: "Ask Me Anything event on JavaScript patterns.",
-  },
-  {
-    id: "e3",
-    title: "Code Review Friday",
-    date: "Mar 22, 4:00 PM",
-    month: "Mar",
-    day: "22",
-    location: "Online",
-    status: "Open",
-    communityId: "pro-gamers",
-    createdBy: "Sara Lee",
-    description: "Live code review session in #code-review.",
-  },
-];
-
-function getCurrentCommunitySlug() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("name") || "pro-gamers";
-}
-
-function loadCommunityEvents() {
-  return JSON.parse(localStorage.getItem(COMMUNITY_EVENTS_STORAGE_KEY) || "[]");
-}
-
-function saveCommunityEvents(events) {
-  localStorage.setItem(COMMUNITY_EVENTS_STORAGE_KEY, JSON.stringify(events));
-}
-
-function getActiveCommunityEvents() {
-  const all = loadCommunityEvents();
-  const communityId = getCurrentCommunitySlug();
-  const filtered = all.filter((e) => e.communityId === communityId);
-  if (filtered.length) return filtered;
-  return defaultEvents.filter((e) => e.communityId === communityId);
+    // Do not auto-click channels; let the user browse the community page first.
+    if (!isMember) {
+        // Show a join hint in the chat area
+        const activeCh = document.getElementById('activeCh');
+        const activeChDesc = document.getElementById('activeChDesc');
+        if (activeCh)     activeCh.textContent     = 'Members Only';
+        if (activeChDesc) activeChDesc.textContent = '🔒 Join this community to read and send messages.';
+    }
 }
 
 function renderCommunityEvents() {
-  const container = document.getElementById("activeEventsList");
-  if (!container) return;
+    const container = document.getElementById('activeEventsList');
+    if (!container) return;
 
-  const events = getActiveCommunityEvents();
-  if (!events.length) {
-    container.innerHTML =
-      '<div style="padding:12px;font-size:13px;color:var(--text-muted);">No active events yet. Ask a gamer to create one in Community Manager.</div>';
-    return;
-  }
+    if (_events.length === 0) {
+        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">No active events yet</div>';
+        return;
+    }
 
-  container.innerHTML = events
-    .map(
-      (ev) => `
-      <div class="event-mini" data-event-id="${ev.id}">
-        <div class="ev-date">
-          <div class="ev-mon">${ev.month || "--"}</div>
-          <div class="ev-day">${ev.day || "--"}</div>
-        </div>
-        <div class="ev-info">
-          <div class="ev-name">${ev.title}</div>
-          <div class="ev-meta">${ev.location || "🌐 Online"} · ${ev.time || ev.date}</div>
-          <div class="ev-created-by" style="font-size:11px;color:var(--text-muted);margin-top:4px;">Created by ${ev.createdBy || "gamer"}</div>
-        </div>
-        <span class="ev-badge">${ev.status || "Open"}</span>
-      </div>`,
-    )
-    .join("");
+    container.innerHTML = _events.map(ev => {
+        const date  = new Date(ev.date);
+        const day   = date.getDate().toString().padStart(2, '0');
+        const month = date.toLocaleString('en-US', { month: 'short' });
 
-  document.querySelectorAll(".event-mini").forEach((card) => {
-    card.onclick = () => {
-      const id = card.dataset.eventId;
-      const eventObj = events.find((e) => `${e.id}` === id);
-      if (eventObj) showEventDetailsModal(eventObj);
-    };
-  });
+        return `
+            <div class="event-mini" onclick="window.location.href='events.html'">
+                <div class="ev-date">
+                    <div class="ev-mon">${month}</div>
+                    <div class="ev-day">${day}</div>
+                </div>
+                <div class="ev-info">
+                    <div class="ev-name">${ev.title}</div>
+                    <div class="ev-meta">${ev.time || '—'} · ${ev.attendees || 0} attending</div>
+                </div>
+                <span class="ev-badge">${ev.status}</span>
+            </div>
+        `;
+    }).join('');
 }
 
-function showEventDetailsModal(ev) {
-  const existing = document.getElementById("eventDetailsModal");
-  if (existing) existing.remove();
+// ── Actions ───────────────────────────────────────────────────────────────────
+window.selectChannel = function (row, channelName, description) {
+    // Highlight active row briefly for visual feedback
+    document.querySelectorAll('.ch-row').forEach(r => r.classList.remove('active-ch'));
+    if (row) row.classList.add('active-ch');
 
-  const backdrop = document.createElement("div");
-  backdrop.id = "eventDetailsModal";
-  backdrop.className = "event-details-backdrop";
-  backdrop.innerHTML = `
-    <div class="event-details-modal">
-      <div class="event-details-header">
-        <h3>${ev.title}</h3>
-        <button class="event-details-close" aria-label="Close">&times;</button>
-      </div>
-      <div class="event-details-body">
-        <div><strong>Date & Time:</strong> ${ev.date || "TBD"}</div>
-        <div><strong>Location:</strong> ${ev.location || "Online"}</div>
-        <div><strong>Status:</strong> ${ev.status || "Open"}</div>
-        <div><strong>Created by:</strong> ${ev.createdBy || "gamer"}</div>
-        <div style="margin-top:8px; color:var(--text-secondary)">${ev.description || "No description added."}</div>
-      </div>
-      <div class="event-details-footer">
-        <button class="btn-ghost" onclick="openEventPage('${ev.id}')">View in Events</button>
-      </div>
-    </div>`;
+    // Navigate to chat.html with community + channel context
+    const communityId = _comm?.id || new URLSearchParams(window.location.search).get('id') || '';
+    const communityName = encodeURIComponent(_comm?.name || 'Community');
+    const channel = encodeURIComponent(channelName);
+    sessionStorage.setItem('currentCommunityId', String(communityId));
+    sessionStorage.setItem('selectedChannel', channelName);
+    sessionStorage.setItem('fromCommunityPage', 'true');
 
-  backdrop.onclick = (e) => {
-    if (e.target === backdrop) backdrop.remove();
-  };
-
-  backdrop.querySelector(".event-details-close").onclick = () =>
-    backdrop.remove();
-
-  document.body.appendChild(backdrop);
-}
-
-window.openEventPage = function (eventId) {
-  const redirectTo = eventId
-    ? `events.html?event=${encodeURIComponent(eventId)}`
-    : "events.html";
-  window.location.href = redirectTo;
+    setTimeout(() => {
+        window.location.href = `chat.html?community=${communityId}&cname=${communityName}&channel=${channel}`;
+    }, 150); // brief delay so active state is visible
 };
 
-function initPage() {
-  renderCommunityRail();
-  renderChannels();
-  initJoinState();
+window.toggleMainJoin = async function () {
+    if (!_comm) return;
+    const btn = document.getElementById('joinMainBtn');
+    let joinedIds = JSON.parse(localStorage.getItem('nexus_joined_communities') || '[]');
+    const id = String(_comm.id);
+    const isJoined = joinedIds.includes(id);
+    const userId = JSON.parse(localStorage.getItem('nexus_user') || '{}').id || 3;
 
-  // Auto-select first channel row
-  const first = document.querySelector("#channelsList .ch-row");
-  if (first) selectChannel(first, first.dataset.name || "general");
+    if (isJoined) {
+        try {
+            const all = await window.API.memberships.getAll();
+            const match = all.find(m => String(m.communityId) === id && String(m.userId) === String(userId));
+            if (match) await window.API.memberships.delete(match.id);
+        } catch (e) { /* ignore */ }
+        joinedIds = joinedIds.filter(s => s !== id);
+        if (btn) { btn.classList.remove('joined'); btn.textContent = '+ Join Community'; }
+        if (window.toast) window.toast('Left community.');
+    } else {
+        try {
+            await window.API.memberships.create({ userId: Number(userId), communityId: Number(_comm.id) });
+        } catch (e) { /* duplicate is OK */ }
+        joinedIds.push(id);
+        if (btn) { btn.classList.add('joined'); btn.textContent = '✓ Joined'; }
+        if (window.toast) window.toast(`Welcome to ${_comm.name}! 🚀`);
+    }
 
-  renderCommunityEvents();
+    localStorage.setItem('nexus_joined_communities', JSON.stringify(joinedIds));
+};
+
+function initJoinState(communityId) {
+    const btn = document.getElementById('joinMainBtn');
+    if (!btn) return;
+    const joinedIds = JSON.parse(localStorage.getItem('nexus_joined_communities') || '[]');
+    const isJoined = joinedIds.includes(String(communityId));
+    if (isJoined) { btn.classList.add('joined'); btn.textContent = '✓ Joined'; }
+    else { btn.classList.remove('joined'); btn.textContent = '+ Join Community'; }
 }
 
-window.onload = initPage;
-
-// Tabs & sidebar
 window.switchTab = function (tabName, btn) {
-  document
-    .querySelectorAll(".tab-btn")
-    .forEach((t) => t.classList.remove("active"));
-  document
-    .querySelectorAll(".tab-content")
-    .forEach((c) => c.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-  const target = document.getElementById("tab-" + tabName);
-  if (target) target.classList.add("active");
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.getElementById('tab-' + tabName)?.classList.add('active');
 };
 
-window.toggleSidebar = function () {
-  const sidebar = document.getElementById("sidebar");
-  if (sidebar) sidebar.classList.toggle("expanded");
+function initCommunityNavigation(communityId) {
+    const manageBtn = document.getElementById('rbacManageBtn');
+    if (!manageBtn) return;
+
+    const user     = typeof getCurrentUser === 'function' ? getCurrentUser() : {};
+    const ownedIds = JSON.parse(localStorage.getItem('nexus_owned_community_ids') || '[]');
+
+    // Show settings only if: created this community, ownerId matches, or is admin
+    const isOwner = ownedIds.includes(String(communityId))
+        || (user?.id && String(_comm?.ownerId) === String(user.id))
+        || user?.role === 'admin';
+
+    if (isOwner) {
+        manageBtn.href = `community-settings.html?id=${encodeURIComponent(communityId)}`;
+        manageBtn.style.display = '';
+    } else {
+        manageBtn.style.display = 'none';
+    }
+}
+
+window.showJoinPrompt = function () {
+    if (window.toast) window.toast('🔒 Join this community first to access channels!');
+    const btn = document.getElementById('joinMainBtn');
+    if (btn) btn.classList.add('pulse-hint');
+    setTimeout(() => btn?.classList.remove('pulse-hint'), 2000);
 };
+
+window.goBackFromCommunity = function () {
+    const referrerPage = document.referrer.split('/').pop();
+    const internalReferrer = ['discovery.html', 'dashboard.html', 'events.html'].some(page =>
+        referrerPage.startsWith(page)
+    );
+
+    if (internalReferrer && window.history.length > 1) {
+        window.history.back();
+        return;
+    }
+
+    window.location.href = 'discovery.html';
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadCommunityData();
+    renderCommunityData();
+    console.log('%c[CommunityPage] %cLive backend data loaded.', 'color: #5B6EF5; font-weight: bold;', 'color: #10B981;');
+});
