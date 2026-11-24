@@ -6,7 +6,10 @@ export default function EventDetailModal({
   isOpen,
   onClose,
   isRegistered = false,
+  isRegisterPending = false,
+  isLeavePending = false,
   onRegister,
+  onCancel,
   formatDate,
 }) {
   if (!isOpen || !event) return null;
@@ -14,6 +17,7 @@ export default function EventDetailModal({
   const formattedDate = formatDate ? formatDate(event.date) : event.date;
   const attendees = event.attendees ?? event.registered ?? 0;
   const capacity = event.maxAttendees || event.capacity || '∞';
+  const isFull = Boolean(event.maxAttendees && attendees >= event.maxAttendees);
 
   return (
     <div
@@ -48,18 +52,59 @@ export default function EventDetailModal({
           </p>
           <p id="modalCategory">🏆 {event.type || event.category || 'Event'}</p>
         </div>
-        {!isRegistered && onRegister && (
-          <button
-            className="btn-publish"
-            style={{ width: '100%', marginTop: '16px' }}
-            onClick={() => {
-              onClose();
-              onRegister(event);
-            }}
-          >
-            Register Now
-          </button>
-        )}
+
+        <div className="modal-actions-bar" style={{ marginTop: '20px' }}>
+          {!isRegistered ? (
+            onRegister && (
+              <button
+                className="btn-publish"
+                style={{ width: '100%' }}
+                onClick={() => {
+                  onClose();
+                  onRegister(event);
+                }}
+                disabled={isFull || isRegisterPending}
+              >
+                {isRegisterPending ? 'Registering...' : isFull ? 'Event Full' : 'Register Now'}
+              </button>
+            )
+          ) : (
+            <div
+              className="modal-registered-group"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                width: '100%',
+              }}
+            >
+              <span
+                className="badge-registered"
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+              >
+                ✓ Registered
+              </span>
+              {onCancel && (
+                <button
+                  type="button"
+                  className="btn-leave-event"
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '13px',
+                    borderRadius: '10px',
+                  }}
+                  onClick={async () => {
+                    await onCancel(event);
+                  }}
+                  disabled={isLeavePending}
+                >
+                  {isLeavePending ? 'Leaving...' : 'Leave Event'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

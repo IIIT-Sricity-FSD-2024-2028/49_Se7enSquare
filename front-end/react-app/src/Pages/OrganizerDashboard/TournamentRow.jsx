@@ -59,7 +59,7 @@ export default function TournamentRow({
         {displayCount}
         {event.maxAttendees ? ` / ${event.maxAttendees}` : ''}
       </td>
-      <td>
+      <td className="actions-col">
         <div className="btn-row">
           <button
             className="act-btn act-edit"

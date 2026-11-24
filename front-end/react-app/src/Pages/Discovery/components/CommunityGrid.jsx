@@ -7,7 +7,16 @@ import { memberCountOf, onlineCountOf } from '../../../Components/platform/data/
  * body-area: featured banner + community grid.
  * Mirrors the HTML structure: #featuredSection + .grid-header + .comm-grid
  */
-export default function CommunityGrid({ loading, filtered, communities, joinedIds, onToggleJoin }) {
+export default function CommunityGrid({
+  loading,
+  filtered,
+  communities,
+  joinedIds,
+  pendingIds = new Set(),
+  onJoin,
+  onLeave,
+  onToggleJoin,
+}) {
   const navigate = useNavigate();
 
   // Featured = highest onlineCount community (mirrors renderFeaturedCommunity in discovery.js)
@@ -15,6 +24,7 @@ export default function CommunityGrid({ loading, filtered, communities, joinedId
     ? [...communities].sort((a, b) => onlineCountOf(b) - onlineCountOf(a))[0]
     : null;
   const featJoined = featured ? joinedIds.has(String(featured.id)) : false;
+  const featPending = featured ? pendingIds.has(String(featured.id)) : false;
 
   return (
     <div className="body-area discovery-body-area">
@@ -39,12 +49,36 @@ export default function CommunityGrid({ loading, filtered, communities, joinedId
               <div className="feat-tag">📍 {featured.category || 'Gaming'}</div>
             </div>
           </div>
-          <button
-            className={`btn-join-feat${featJoined ? ' joined' : ''}`}
-            onClick={e => { e.stopPropagation(); onToggleJoin(featured.id, e); }}
-          >
-            {featJoined ? '✓ Joined' : 'Join Community'}
-          </button>
+          {!featJoined ? (
+            <button
+              type="button"
+              className={`btn-join-feat${featPending ? ' loading' : ''}`}
+              disabled={featPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onJoin) onJoin(featured.id, e);
+                else onToggleJoin(featured.id, e);
+              }}
+            >
+              {featPending ? 'Joining…' : 'Join Community'}
+            </button>
+          ) : (
+            <div className="feat-joined-actions">
+              <span className="feat-badge-joined">✓ Joined</span>
+              <button
+                type="button"
+                className={`btn-leave-feat${featPending ? ' loading' : ''}`}
+                disabled={featPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onLeave) onLeave(featured.id, e);
+                  else onToggleJoin(featured.id, e);
+                }}
+              >
+                {featPending ? 'Leaving…' : 'Leave'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -74,6 +108,9 @@ export default function CommunityGrid({ loading, filtered, communities, joinedId
               key={comm.id}
               comm={comm}
               isJoined={joinedIds.has(String(comm.id))}
+              isPending={pendingIds.has(String(comm.id))}
+              onJoin={onJoin}
+              onLeave={onLeave}
               onToggleJoin={onToggleJoin}
             />
           ))

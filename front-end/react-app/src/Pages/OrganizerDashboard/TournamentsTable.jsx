@@ -27,7 +27,7 @@ export default function TournamentsTable({
               <th>Date</th>
               <th>Status</th>
               <th>Registrations</th>
-              <th>Actions</th>
+              <th className="actions-col">Actions</th>
             </tr>
           </thead>
           <tbody>

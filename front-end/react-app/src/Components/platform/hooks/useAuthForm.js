@@ -1,8 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { authService } from '../../../services/authService';
-import { loginSuccess } from '../../../store/slices/authSlice';
+import {
+  loginSuccess,
+  loginUser,
+  registerUser,
+  clearAuthErrors,
+  setAuthLoginError,
+  setAuthRegError,
+  selectLoginLoading,
+  selectLoginError,
+  selectRegLoading,
+  selectRegError,
+} from '../../../store/slices/authSlice';
 import { toastShown } from '../../../store/slices/uiSlice';
 import { initiateGoogleSignIn } from '../../../services/googleAuth';
 import { getHomeRoute } from '../../../services/roleAccess';
@@ -23,6 +34,12 @@ export default function useAuthForm() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
+  // ── Redux Auth State ──
+  const loginLoading = useSelector(selectLoginLoading);
+  const reduxLoginError = useSelector(selectLoginError);
+  const regLoading = useSelector(selectRegLoading);
+  const reduxRegError = useSelector(selectRegError);
+
   // ── 1. Tab & View State ──
   // Tabs: 'login' | 'register' | 'forgot' | 'forgot-success'
   const [currentTab, setCurrentTab] = useState('login');
@@ -42,8 +59,33 @@ export default function useAuthForm() {
   const [loginRole, setLoginRole] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginErrors, setLoginErrors] = useState({});
+  const [loginFieldErrors, setLoginFieldErrors] = useState({});
+
+  // Merge client field validation errors with Redux server-side login error
+  const loginErrors = useMemo(() => ({
+    ...loginFieldErrors,
+    ...(reduxLoginError || {}),
+  }), [loginFieldErrors, reduxLoginError]);
+
+  const setLoginErrors = useCallback((updater) => {
+    if (typeof updater === 'function') {
+      setLoginFieldErrors((prev) => {
+        const next = updater({ ...prev, ...(reduxLoginError || {}) });
+        if (!next.general && reduxLoginError?.general) {
+          dispatch(setAuthLoginError(null));
+        }
+        return next;
+      });
+    } else if (updater && Object.keys(updater).length === 0) {
+      setLoginFieldErrors({});
+      dispatch(setAuthLoginError(null));
+    } else {
+      setLoginFieldErrors(updater || {});
+      if (updater?.general) {
+        dispatch(setAuthLoginError({ general: updater.general, isSanctioned: updater.isSanctioned }));
+      }
+    }
+  }, [dispatch, reduxLoginError]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -56,18 +98,18 @@ export default function useAuthForm() {
           (accountStatus === 'ACCOUNT_BANNED'
             ? 'This account has been banned.'
             : 'This account has been suspended.');
-        setLoginErrors((prev) => ({ ...prev, general: msg, isSanctioned: true }));
+        dispatch(setAuthLoginError({ general: msg, isSanctioned: true }));
         showToast('⚠️', msg);
       }
       // Set by handleRoleMismatch() in services/api.js after an admin changed
       // this user's role: explain why they were logged out.
       if (params.get('roleChanged')) {
         const msg = 'Your role was changed by an admin. Please log in again.';
-        setLoginErrors((prev) => ({ ...prev, general: msg }));
+        dispatch(setAuthLoginError({ general: msg, isSanctioned: false }));
         showToast('ℹ️', msg);
       }
     }
-  }, [showToast]);
+  }, [dispatch, showToast]);
 
   const validateLogin = () => {
     const errors = {};
@@ -81,7 +123,7 @@ export default function useAuthForm() {
       errors.password = 'Password is required.';
     }
 
-    setLoginErrors(errors);
+    setLoginFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
@@ -92,23 +134,22 @@ export default function useAuthForm() {
 
   const handleLoginSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (loginLoading) return;
     if (!validateLogin()) {
       triggerShake();
       showToast('⚠️', 'Please enter your username/email and password.');
       return;
     }
 
-    setLoginLoading(true);
-    setLoginErrors((prev) => ({ ...prev, general: '' }));
+    setLoginFieldErrors({});
+    dispatch(clearAuthErrors());
 
     try {
-      const user = await authService.login({
+      const user = await dispatch(loginUser({
         login: loginEmail,
         password: loginPassword,
         role: loginRole,
-      });
-
-      dispatch(loginSuccess(user));
+      })).unwrap();
 
       showToast(
         '✅',
@@ -116,24 +157,13 @@ export default function useAuthForm() {
       );
 
       setTimeout(() => {
-        setLoginLoading(false);
         navigateByRole(user.role);
       }, 700);
     } catch (err) {
       console.error('Login request failed:', err);
       triggerShake();
-      const failMsg = err.reason || err.message || 'Cannot reach authentication server';
-      const isSanctioned =
-        err.code === 'ACCOUNT_BANNED' ||
-        err.code === 'ACCOUNT_SUSPENDED' ||
-        err.status === 403;
-      setLoginErrors((prev) => ({
-        ...prev,
-        general: failMsg,
-        isSanctioned: isSanctioned || prev.isSanctioned,
-      }));
+      const failMsg = err?.general || err?.reason || err?.message || 'Cannot reach authentication server';
       showToast('❌', failMsg);
-      setLoginLoading(false);
     }
   };
 
@@ -142,7 +172,8 @@ export default function useAuthForm() {
     setLoginEmail(p.username);
     setLoginPassword(p.pass);
     setLoginRole(p.role);
-    setLoginErrors({});
+    setLoginFieldErrors({});
+    dispatch(clearAuthErrors());
     showToast('⚡', `Loaded credentials for ${p.name}`);
   };
 
@@ -156,8 +187,33 @@ export default function useAuthForm() {
   const [regTerms, setRegTerms] = useState(false);
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirm, setShowRegConfirm] = useState(false);
-  const [regLoading, setRegLoading] = useState(false);
-  const [regErrors, setRegErrors] = useState({});
+  const [regFieldErrors, setRegFieldErrors] = useState({});
+
+  // Merge client field validation errors with Redux server-side registration error
+  const regErrors = useMemo(() => ({
+    ...regFieldErrors,
+    ...(reduxRegError || {}),
+  }), [regFieldErrors, reduxRegError]);
+
+  const setRegErrors = useCallback((updater) => {
+    if (typeof updater === 'function') {
+      setRegFieldErrors((prev) => {
+        const next = updater({ ...prev, ...(reduxRegError || {}) });
+        if (!next.general && reduxRegError?.general) {
+          dispatch(setAuthRegError(null));
+        }
+        return next;
+      });
+    } else if (updater && Object.keys(updater).length === 0) {
+      setRegFieldErrors({});
+      dispatch(setAuthRegError(null));
+    } else {
+      setRegFieldErrors(updater || {});
+      if (updater?.general) {
+        dispatch(setAuthRegError({ general: updater.general }));
+      }
+    }
+  }, [dispatch, reduxRegError]);
 
   const getPasswordStrength = (pass) => {
     if (!pass) return { level: '', label: '' };
@@ -207,36 +263,36 @@ export default function useAuthForm() {
       errors.terms = 'You must agree to the Terms of Service and Privacy Policy.';
     }
 
-    setRegErrors(errors);
+    setRegFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleRegisterSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (regLoading) return;
     if (!validateRegister()) {
       triggerShake();
       showToast('⚠️', 'Please complete all required registration fields.');
       return;
     }
 
-    setRegLoading(true);
-    setRegErrors((prev) => ({ ...prev, general: '' }));
+    setRegFieldErrors({});
+    dispatch(clearAuthErrors());
 
     try {
       const nameParts = regFullName.trim().split(/\s+/);
       const firstName = nameParts[0] || regFullName.trim();
       const lastName = nameParts.slice(1).join(' ') || undefined;
 
-      const createdUser = await authService.register({
+      const createdUser = await dispatch(registerUser({
         username: regHandle,
         email: regEmail,
         password: regPassword,
         role: regRole,
         firstName,
         lastName,
-      });
+      })).unwrap();
 
-      setRegLoading(false);
       showToast('🎉', `Account @${createdUser.username} created successfully! Please sign in.`);
       setTimeout(() => {
         setCurrentTab('login');
@@ -247,10 +303,8 @@ export default function useAuthForm() {
     } catch (err) {
       console.error('Registration error:', err);
       triggerShake();
-      const failMsg = err.message || 'Unable to connect to registration server';
-      setRegErrors((prev) => ({ ...prev, general: failMsg }));
+      const failMsg = err?.general || err?.message || 'Unable to connect to registration server';
       showToast('❌', failMsg);
-      setRegLoading(false);
     }
   };
 
@@ -333,7 +387,12 @@ export default function useAuthForm() {
   return {
     navigate,
     currentTab,
-    setCurrentTab,
+    setCurrentTab: (tab) => {
+      dispatch(clearAuthErrors());
+      setLoginFieldErrors({});
+      setRegFieldErrors({});
+      setCurrentTab(tab);
+    },
     cardShake,
     showToast,
     // Login

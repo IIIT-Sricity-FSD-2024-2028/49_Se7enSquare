@@ -21,7 +21,7 @@ export default function Discovery() {
     activeCategory, setActiveCategory,
     sortBy, setSortBy,
     showSort, setShowSort,
-    joinedIds, toggleJoin,
+    joinedIds, pendingIds, onJoin, onLeave, toggleJoin,
     categories, filtered,
     totalMembers, totalOnline, eventCount,
   } = useDiscovery();
@@ -58,6 +58,9 @@ export default function Discovery() {
             filtered={filtered}
             communities={communities}
             joinedIds={joinedIds}
+            pendingIds={pendingIds}
+            onJoin={onJoin}
+            onLeave={onLeave}
             onToggleJoin={toggleJoin}
           />
         </div>

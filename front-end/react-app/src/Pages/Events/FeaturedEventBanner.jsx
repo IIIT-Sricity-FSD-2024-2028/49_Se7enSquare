@@ -13,8 +13,11 @@ export default function FeaturedEventBanner({
   event,
   comm,
   isRegistered = false,
+  isRegisterPending = false,
+  isLeavePending = false,
   onView,
   onRegister,
+  onCancel,
 }) {
   if (!event) return null;
 
@@ -118,16 +121,32 @@ export default function FeaturedEventBanner({
         </div>
 
         <div className="feat-btn-stack">
-          <button
-            type="button"
-            className={`btn-feat-primary${isRegistered ? ' registered' : ''}`}
-            onClick={() => {
-              if (!isRegistered && onRegister) onRegister(event);
-            }}
-            disabled={isRegistered || isFull}
-          >
-            {isRegistered ? '✓ Registered' : isFull ? 'Event Full' : 'Register Now'}
-          </button>
+          {!isRegistered ? (
+            <button
+              type="button"
+              className="btn-feat-primary"
+              onClick={() => {
+                if (!isFull && onRegister) onRegister(event);
+              }}
+              disabled={isFull || isRegisterPending}
+            >
+              {isRegisterPending ? 'Registering...' : isFull ? 'Event Full' : 'Register Now'}
+            </button>
+          ) : (
+            <div className="feat-registered-group">
+              <span className="feat-badge-registered">✓ Registered</span>
+              <button
+                type="button"
+                className="btn-feat-leave"
+                onClick={() => {
+                  if (onCancel) onCancel(event);
+                }}
+                disabled={isLeavePending}
+              >
+                {isLeavePending ? 'Leaving...' : 'Leave Event'}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="btn-feat-secondary"

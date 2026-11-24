@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toastShown } from '../../../store/slices/uiSlice';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
@@ -11,6 +11,9 @@ import {
   deleteCommunity,
   selectCurrentCommunity,
   selectJoinedIds,
+  currentTabSet,
+  currentMemberSearchSet,
+  clearCurrentCommunity,
 } from '../../../store/slices/communitiesSlice';
 
 // Demo fallback used only to fill fields the API record doesn't carry.
@@ -59,8 +62,11 @@ export default function useCommunityPage(id, navigate) {
     firstName: sessionUser?.firstName || sessionUser?.name?.split(' ')[0] || 'User',
   }), [sessionUser]);
 
-  const [activeTab, setActiveTab] = useState('overview');
-  const [memberSearch, setMemberSearch] = useState('');
+  // View state managed in Redux store (state.communities.current)
+  const activeTab = current.activeTab || 'overview';
+  const memberSearch = current.memberSearch || '';
+  const setActiveTab = (tab) => dispatch(currentTabSet(tab));
+  const setMemberSearch = (val) => dispatch(currentMemberSearchSet(val));
 
   const showToast = (msg) => dispatch(toastShown({ msg }));
 
@@ -70,6 +76,13 @@ export default function useCommunityPage(id, navigate) {
     [current.community]
   );
   const joined = joinedIds.includes(String(id));
+
+  // Clear current community view state when navigating away (unmount cleanup)
+  useEffect(() => {
+    return () => {
+      dispatch(clearCurrentCommunity());
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     dispatch(fetchCommunityPage(id));

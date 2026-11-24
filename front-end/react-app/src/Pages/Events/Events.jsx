@@ -41,7 +41,13 @@ export default function Events() {
     dispatch(fetchCommunityList());
   }, [dispatch]);
 
-  const { isRegistered, registerForEvent, cancelRegistration } = useRegistrations();
+  const {
+    isRegistered,
+    isRegisterPending,
+    isLeavePending,
+    registerForEvent,
+    cancelRegistration,
+  } = useRegistrations();
 
   const handleOpenRegisterModal = (ev) => {
     if (!user || !user.id) {
@@ -58,20 +64,27 @@ export default function Events() {
     }
     const res = await registerForEvent(ev, regData);
     if (res.success) {
-      showToast('Registered successfully!');
+      showToast('Registered successfully! ⚡');
       setRegisterEvent(null);
     } else {
-      showToast(res.error || 'Could not register. Please try again.');
+      showToast(`⚠️ ${res.error || 'Could not register. Please try again.'}`);
     }
   };
 
   const handleCancel = async (regOrEv) => {
-    if (!window.confirm(`Cancel registration for "${regOrEv.title || regOrEv.eventTitle || 'this event'}"?`)) return;
-    try {
-      await cancelRegistration(regOrEv);
-      showToast('Registration cancelled.');
-    } catch (err) {
-      showToast(`⚠️ ${err?.message || 'Could not cancel registration.'}`);
+    const title = regOrEv?.title || regOrEv?.eventTitle || 'this event';
+    if (
+      typeof window !== 'undefined' &&
+      window.confirm &&
+      !window.confirm(`Are you sure you want to leave "${title}"?`)
+    ) {
+      return;
+    }
+    const res = await cancelRegistration(regOrEv);
+    if (res?.success) {
+      showToast('Left event successfully.');
+    } else {
+      showToast(`⚠️ ${res?.error || 'Could not leave event.'}`);
     }
   };
 
@@ -103,8 +116,11 @@ export default function Events() {
               event={upcomingEvents[0]}
               comm={getCommunityObject(upcomingEvents[0].communityId, communities)}
               isRegistered={isRegistered(upcomingEvents[0].id)}
+              isRegisterPending={isRegisterPending(upcomingEvents[0].id)}
+              isLeavePending={isLeavePending(upcomingEvents[0].id)}
               onView={setDetailEvent}
               onRegister={handleOpenRegisterModal}
+              onCancel={handleCancel}
             />
           )}
 
@@ -120,6 +136,8 @@ export default function Events() {
             loading={eventsLoading}
             getCommunity={(id) => getCommunityObject(id, communities)}
             isRegistered={isRegistered}
+            isRegisterPending={isRegisterPending}
+            isLeavePending={isLeavePending}
             onView={setDetailEvent}
             onRegister={handleOpenRegisterModal}
             onCancel={handleCancel}
@@ -133,7 +151,10 @@ export default function Events() {
           isOpen={!!detailEvent}
           onClose={() => setDetailEvent(null)}
           isRegistered={detailEvent ? isRegistered(detailEvent.id) : false}
+          isRegisterPending={detailEvent ? isRegisterPending(detailEvent.id) : false}
+          isLeavePending={detailEvent ? isLeavePending(detailEvent.id) : false}
           onRegister={handleOpenRegisterModal}
+          onCancel={handleCancel}
         />
 
         <RegistrationModal
@@ -141,6 +162,8 @@ export default function Events() {
           isOpen={!!registerEvent}
           onClose={() => setRegisterEvent(null)}
           onSubmit={handleConfirmRegistration}
+          isSubmitting={registerEvent ? isRegisterPending(registerEvent.id) : false}
+          currentUser={user}
         />
 
         </div>

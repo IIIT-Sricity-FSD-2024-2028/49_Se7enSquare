@@ -9,6 +9,8 @@ export default function EventsGrid({
   loading = false,
   getCommunity,
   isRegistered,
+  isRegisterPending,
+  isLeavePending,
   onView,
   onRegister,
   onCancel,
@@ -33,6 +35,8 @@ export default function EventsGrid({
             index={idx}
             comm={getCommunity ? getCommunity(ev.communityId) : null}
             isRegistered={isRegistered ? isRegistered(ev.id) : false}
+            isRegisterPending={isRegisterPending ? isRegisterPending(ev.id) : false}
+            isLeavePending={isLeavePending ? isLeavePending(ev.id) : false}
             onView={onView}
             onRegister={onRegister}
             onCancel={onCancel}

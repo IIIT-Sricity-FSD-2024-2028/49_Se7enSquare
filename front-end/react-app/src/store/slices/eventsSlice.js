@@ -114,7 +114,7 @@ export const fetchMyRegistrations = createAsyncThunk(
 
 export const registerForEvent = createAsyncThunk(
   'events/register',
-  async ({ event, formData }, { getState, rejectWithValue }) => {
+  async ({ event, formData = {} }, { getState, rejectWithValue }) => {
     const user = getState().auth.user;
     if (!user?.id) return rejectWithValue({ message: 'Please log in to register' });
     const payload = {
@@ -134,16 +134,65 @@ export const registerForEvent = createAsyncThunk(
   }
 );
 
-// Takes the event (what EventCard passes) and cancels the user's own registration for it
+// Takes the event or id and cancels the user's own registration for it
 export const cancelRegistration = createAsyncThunk(
   'events/cancelRegistration',
-  async (event, { getState }) => {
-    const reg = getState().events.myRegistrations.find((r) => sameId(r.eventId, event.id));
-    const regId = reg?.id || reg?.registrationId;
+  async (arg, { getState, rejectWithValue }) => {
+    const user = getState().auth.user;
+    if (!user?.id) {
+      return rejectWithValue({ message: 'Please log in to manage registrations.' });
+    }
+
+    const myRegistrations = getState().events.myRegistrations || [];
+
+    // Determine target eventId and registrationId
+    let eventId = null;
+    let regId = null;
+
+    if (arg && typeof arg === 'object') {
+      if (arg.eventId !== undefined) {
+        eventId = arg.eventId;
+        regId = arg.id || arg.registrationId;
+      } else if (arg.id !== undefined) {
+        eventId = arg.id;
+      }
+    } else if (typeof arg === 'number' || typeof arg === 'string') {
+      const matchByEvent = myRegistrations.find((r) => sameId(r.eventId, arg));
+      if (matchByEvent) {
+        eventId = matchByEvent.eventId;
+        regId = matchByEvent.id || matchByEvent.registrationId;
+      } else {
+        const matchByReg = myRegistrations.find((r) => sameId(r.id, arg));
+        if (matchByReg) {
+          eventId = matchByReg.eventId;
+          regId = matchByReg.id;
+        } else {
+          eventId = arg;
+        }
+      }
+    }
+
+    if (!regId && eventId !== null && eventId !== undefined) {
+      const reg = myRegistrations.find(
+        (r) => sameId(r.eventId, eventId) && (!r.userId || sameId(r.userId, user.id))
+      );
+      regId = reg?.id || reg?.registrationId;
+    }
+
+    if (!regId) {
+      return rejectWithValue({
+        message: 'No active registration found for this event.',
+      });
+    }
+
     try {
-      if (regId) await eventService.cancelRegistration(regId);
-    } catch { /* keep the previous behaviour: the registration is still removed locally */ }
-    return { eventId: event.id };
+      await eventService.cancelRegistration(regId);
+      return { eventId, registrationId: regId };
+    } catch (err) {
+      return rejectWithValue({
+        message: err.message || 'Could not cancel registration.',
+      });
+    }
   }
 );
 
@@ -215,12 +264,24 @@ const eventsSlice = createSlice({
         state.myRegistrations = action.payload;
       })
       .addCase(registerForEvent.fulfilled, (state, action) => {
-        state.myRegistrations.push(action.payload);
-        changeAttendees(state, action.payload.eventId, 1);
+        const exists = state.myRegistrations.some(
+          (r) => sameId(r.id, action.payload.id) || sameId(r.eventId, action.payload.eventId)
+        );
+        if (!exists) {
+          state.myRegistrations.push(action.payload);
+          changeAttendees(state, action.payload.eventId, 1);
+        }
       })
       .addCase(cancelRegistration.fulfilled, (state, action) => {
-        state.myRegistrations = state.myRegistrations.filter((r) => !sameId(r.eventId, action.payload.eventId));
-        changeAttendees(state, action.payload.eventId, -1);
+        const { eventId, registrationId } = action.payload;
+        state.myRegistrations = state.myRegistrations.filter(
+          (r) =>
+            (!eventId || !sameId(r.eventId, eventId)) &&
+            (!registrationId || !sameId(r.id, registrationId))
+        );
+        if (eventId !== null && eventId !== undefined) {
+          changeAttendees(state, eventId, -1);
+        }
       })
       .addCase(fetchRegistrants.pending, (state) => {
         state.registrants = { ...emptyRegistrants };

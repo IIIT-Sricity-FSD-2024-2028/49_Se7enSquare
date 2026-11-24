@@ -1,11 +1,13 @@
 // User registration modal dialog for signing up to an event.
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function RegistrationModal({
   event,
   isOpen,
   onClose,
   onSubmit,
+  isSubmitting = false,
+  currentUser = null,
 }) {
   const [formData, setFormData] = useState({
     fullName: '',
@@ -15,10 +17,23 @@ export default function RegistrationModal({
   });
   const [errors, setErrors] = useState({});
 
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      setFormData((prev) => ({
+        fullName: prev.fullName || currentUser.name || currentUser.username || '',
+        email: prev.email || currentUser.email || '',
+        phone: prev.phone || '',
+        inGameId: prev.inGameId || '',
+      }));
+    }
+  }, [isOpen, currentUser]);
+
   if (!isOpen || !event) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const newErrors = {};
     if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required.';
     if (!formData.email.trim()) newErrors.email = 'Email is required.';
@@ -40,7 +55,7 @@ export default function RegistrationModal({
       id="registerModal"
       className="event-modal"
       onClick={(e) => {
-        if (e.target === e.currentTarget && onClose) onClose();
+        if (e.target === e.currentTarget && onClose && !isSubmitting) onClose();
       }}
     >
       <div className="event-modal-content">
@@ -48,6 +63,7 @@ export default function RegistrationModal({
           className="event-modal-close"
           onClick={onClose}
           aria-label="Close"
+          disabled={isSubmitting}
         >
           ×
         </button>
@@ -72,6 +88,7 @@ export default function RegistrationModal({
               type="text"
               placeholder="Your full name"
               value={formData.fullName}
+              disabled={isSubmitting}
               onChange={(e) =>
                 setFormData((f) => ({ ...f, fullName: e.target.value }))
               }
@@ -86,6 +103,7 @@ export default function RegistrationModal({
               type="email"
               placeholder="you@example.com"
               value={formData.email}
+              disabled={isSubmitting}
               onChange={(e) =>
                 setFormData((f) => ({ ...f, email: e.target.value }))
               }
@@ -100,6 +118,7 @@ export default function RegistrationModal({
               type="tel"
               placeholder="e.g. 9876543210"
               value={formData.phone}
+              disabled={isSubmitting}
               onChange={(e) =>
                 setFormData((f) => ({ ...f, phone: e.target.value }))
               }
@@ -113,6 +132,7 @@ export default function RegistrationModal({
               type="text"
               placeholder="Your in-game handle"
               value={formData.inGameId}
+              disabled={isSubmitting}
               onChange={(e) =>
                 setFormData((f) => ({ ...f, inGameId: e.target.value }))
               }
@@ -127,14 +147,16 @@ export default function RegistrationModal({
               type="button"
               className="btn-draft"
               onClick={onClose}
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="btn-publish"
+              disabled={isSubmitting}
             >
-              Confirm Registration
+              {isSubmitting ? 'Registering...' : 'Confirm Registration'}
             </button>
           </div>
         </form>

@@ -14,6 +14,8 @@ export default function EventCard({
   index = 0,
   comm,
   isRegistered = false,
+  isRegisterPending = false,
+  isLeavePending = false,
   onView,
   onRegister,
   onCancel,
@@ -111,21 +113,38 @@ export default function EventCard({
             >
               View
             </button>
-            <button
-              type="button"
-              className={`btn-register${isRegistered ? ' registered' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isRegistered && onCancel) {
-                  onCancel(event);
-                } else if (!isFull && onRegister) {
-                  onRegister(event);
-                }
-              }}
-              disabled={isFull && !isRegistered}
-            >
-              {isRegistered ? '✓ Registered' : isFull ? 'Full' : 'Register'}
-            </button>
+            {!isRegistered ? (
+              <button
+                type="button"
+                className="btn-register"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isFull && onRegister) {
+                    onRegister(event);
+                  }
+                }}
+                disabled={isFull || isRegisterPending}
+                title={isFull ? 'Event is full' : 'Register for event'}
+              >
+                {isRegisterPending ? 'Registering...' : isFull ? 'Full' : 'Register'}
+              </button>
+            ) : (
+              <div className="ev-registered-group">
+                <span className="badge-registered">✓ Registered</span>
+                <button
+                  type="button"
+                  className="btn-leave-event"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onCancel) onCancel(event);
+                  }}
+                  disabled={isLeavePending}
+                  title="Leave Event"
+                >
+                  {isLeavePending ? 'Leaving...' : 'Leave Event'}
+                </button>
+              </div>
+            )}
             {canDelete && onDelete && (
               <button
                 type="button"

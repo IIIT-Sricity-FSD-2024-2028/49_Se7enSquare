@@ -7,7 +7,14 @@ import { memberCountOf, onlineCountOf } from '../../../Components/platform/data/
  * CSS classes from discovery.css: c-card, c-banner, c-banner-inner, c-card-body,
  * c-top, c-icon, c-badges, c-badge, c-name, c-cat, c-desc, c-footer, c-stats, c-stat, btn-join.
  */
-export default function CommunityCard({ comm, isJoined, onToggleJoin }) {
+export default function CommunityCard({
+  comm,
+  isJoined,
+  isPending = false,
+  onJoin,
+  onLeave,
+  onToggleJoin,
+}) {
   const navigate = useNavigate();
   const icon = comm.icon || '🏘️';
   const memberCount = memberCountOf(comm);
@@ -71,12 +78,37 @@ export default function CommunityCard({ comm, isJoined, onToggleJoin }) {
             <span className="c-stat">👥 {memberCount.toLocaleString()}</span>
             <span className="c-stat">🟢 {onlineCount.toLocaleString()} online</span>
           </div>
-          <button
-            className={`btn-join${isJoined ? ' joined' : ''}`}
-            onClick={e => { e.stopPropagation(); onToggleJoin(comm.id, e); }}
-          >
-            {isJoined ? '✓ Joined' : 'Join'}
-          </button>
+
+          {!isJoined ? (
+            <button
+              type="button"
+              className={`btn-join${isPending ? ' loading' : ''}`}
+              disabled={isPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onJoin) onJoin(comm.id, e);
+                else onToggleJoin(comm.id, e);
+              }}
+            >
+              {isPending ? 'Joining…' : 'Join'}
+            </button>
+          ) : (
+            <div className="c-joined-actions">
+              <span className="badge-joined">✓ Joined</span>
+              <button
+                type="button"
+                className={`btn-leave${isPending ? ' loading' : ''}`}
+                disabled={isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onLeave) onLeave(comm.id, e);
+                  else onToggleJoin(comm.id, e);
+                }}
+              >
+                {isPending ? 'Leaving…' : 'Leave'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
