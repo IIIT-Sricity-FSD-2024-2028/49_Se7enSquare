@@ -1,5 +1,5 @@
 /**
- * Se7enSquare — Discovery Page
+ * Gameunity — Discovery Page
  * Fully backend-driven: fetches communities from GET /api/communities
  */
 
@@ -55,7 +55,7 @@ function renderCommunities() {
 
     grid.innerHTML = filtered.map((c, index) => {
         const isJoined = joinedList.includes(String(c.id));
-        const icon = c.icon || '🏘️';
+        const icon = escapeHTML(c.icon) || '🏘️';
         const grad = c.grad || 'grad-purple';
         const bannerClass = grad.replace('grad-', 'banner-');
 
@@ -73,10 +73,10 @@ function renderCommunities() {
                         </div>
                     </div>
                     <div>
-                        <div class="c-name">${c.name}</div>
-                        <div class="c-cat">${c.category || 'Gaming'} · ${(c.tags || []).join(', ') || 'Community'}</div>
+                        <div class="c-name">${escapeHTML(c.name)}</div>
+                        <div class="c-cat">${escapeHTML(c.category) || 'Gaming'} · ${(c.tags || []).map(escapeHTML).join(', ') || 'Community'}</div>
                     </div>
-                    <div class="c-desc">${c.description}</div>
+                    <div class="c-desc">${escapeHTML(c.description)}</div>
                     <div class="c-footer">
                         <div class="c-stats">
                             <span class="c-stat">👥 ${(c.memberCount || 0).toLocaleString()}</span>
@@ -105,14 +105,14 @@ function renderFeaturedCommunity() {
 
     container.innerHTML = `
         <div class="featured-banner" onclick="navigateToCommunity(event, '${feat.id}')">
-            <div class="feat-icon ${feat.grad || 'grad-purple'}">${feat.icon || '🏘️'}</div>
+            <div class="feat-icon ${feat.grad || 'grad-purple'}">${escapeHTML(feat.icon) || '🏘️'}</div>
             <div class="feat-info">
-                <div class="feat-name">${feat.name}</div>
-                <div class="feat-desc">${feat.description}</div>
+                <div class="feat-name">${escapeHTML(feat.name)}</div>
+                <div class="feat-desc">${escapeHTML(feat.description)}</div>
                 <div class="feat-meta">
                     <div class="feat-tag"><span class="dot"></span> ${(feat.onlineCount || 0).toLocaleString()} online</div>
                     <div class="feat-tag">👥 ${(feat.memberCount || 0).toLocaleString()} members</div>
-                    <div class="feat-tag">📍 ${feat.category || 'Gaming'}</div>
+                    <div class="feat-tag">📍 ${escapeHTML(feat.category) || 'Gaming'}</div>
                 </div>
             </div>
             <button class="btn-join-feat ${isJoined ? 'joined' : ''}" onclick="toggleJoin(event, '${feat.id}')">
@@ -210,10 +210,41 @@ document.addEventListener('click', e => {
     }
 });
 
+// --- Featured Tournaments carousel (organizer pay-to-promote, doc §18) ---
+async function loadAndRenderFeaturedEvents() {
+    const container = document.getElementById('featuredEventsSection');
+    if (!container) return;
+    try {
+        const featured = await window.API.featuredEvents.getAll();
+        if (!Array.isArray(featured) || featured.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        container.innerHTML = `
+            <div class="featured-events-heading">🏆 Featured Tournaments</div>
+            <div class="featured-events-row">
+                ${featured.map(item => {
+                    const e = item.event || {};
+                    return `
+                    <div class="fe-card" onclick="window.location.href='events.html'">
+                        <span class="fe-tag">FEATURED</span>
+                        <div class="fe-title">${escapeHTML(e.title || 'Tournament')}</div>
+                        <div class="fe-meta">📅 ${escapeHTML(e.date || '')}${e.time ? ' · ' + escapeHTML(e.time) : ''}</div>
+                        <div class="fe-meta">👥 ${e.attendees || 0}/${e.maxAttendees || '∞'}</div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+    } catch (err) {
+        console.warn('[Discovery] Featured events unavailable:', err.message);
+        container.innerHTML = '';
+    }
+}
+
 // --- 5. STARTUP ---
 document.addEventListener('DOMContentLoaded', async () => {
     await loadCommunities();
     renderCommunities();
+    loadAndRenderFeaturedEvents();
 
     window.addEventListener('keydown', e => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {

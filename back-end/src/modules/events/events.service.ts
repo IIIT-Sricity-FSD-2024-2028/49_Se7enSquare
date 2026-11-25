@@ -5,11 +5,18 @@ import { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class EventsService {
-  findAll(status?: string): EventRecord[] {
-    if (status) {
-      return db.events.filter((item) => item.status === status);
+  findAll(status?: string, includeSuspended = false): EventRecord[] {
+    const suspendedCommIds = new Set(
+      db.communities.filter((c) => c.status === 'suspended').map((c) => c.id),
+    );
+    let list = db.events;
+    if (!includeSuspended) {
+      list = list.filter((item) => !suspendedCommIds.has(item.communityId));
     }
-    return db.events;
+    if (status) {
+      return list.filter((item) => item.status === status);
+    }
+    return list;
   }
 
   findOne(id: number): EventRecord {
@@ -85,5 +92,31 @@ export class EventsService {
     db.events = db.events.filter((item) => item.id !== id);
     saveDb();
     return { message: `Event ${id} deleted` };
+  }
+
+  /**
+   * Every registration for one event, joined with the registrant's platform
+   * username plus the contact details they gave at registration time — powers
+   * the organizer's "View Registrants" page (event-registrants.html).
+   */
+  getRegistrants(id: number) {
+    const event = this.findOne(id);
+    const registrations = db.eventRegistrations.filter((item) => item.eventId === id);
+
+    const registrants = registrations.map((reg) => {
+      const user = db.users.find((item) => item.id === reg.userId);
+      return {
+        registrationId: reg.id,
+        userId: reg.userId,
+        username: user?.username || `user#${reg.userId}`,
+        fullName: reg.fullName || '',
+        email: reg.contactEmail || user?.email || '',
+        phone: reg.phone || '',
+        inGameId: reg.inGameId || '',
+        registeredAt: reg.registeredAt,
+      };
+    });
+
+    return { eventId: event.id, eventTitle: event.title, registrants };
   }
 }

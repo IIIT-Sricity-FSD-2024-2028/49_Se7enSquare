@@ -1,5 +1,5 @@
 /**
- * Se7enSquare - Authentication & RBAC Logic
+ * Gameunity - Authentication & RBAC Logic
  * Centralizes session persistence, role normalization, and client-side access checks.
  */
 
@@ -7,37 +7,47 @@ const ROLES = {
     USER: "user",
     MODERATOR: "moderator",
     COMMUNITY_MANAGER: "community_manager",
-    ADMIN: "admin"
+    ORGANIZER: "organizer", // certified tournament organizer — creates/manages events
+    ADMIN: "admin",
+    OWNER: "owner" // platform owner — read-only access to statistics/health only
 };
 
 const ROLE_HIERARCHY = [
     ROLES.USER,
     ROLES.MODERATOR,
     ROLES.COMMUNITY_MANAGER,
-    ROLES.ADMIN
+    ROLES.ORGANIZER,
+    ROLES.ADMIN,
+    ROLES.OWNER
 ];
 
 const ROLE_LEVELS = {
     [ROLES.USER]: 1,
     [ROLES.MODERATOR]: 2,
     [ROLES.COMMUNITY_MANAGER]: 3,
-    [ROLES.ADMIN]: 4
+    [ROLES.ORGANIZER]: 3, // peer of community_manager, not strictly more/less privileged
+    [ROLES.ADMIN]: 4,
+    [ROLES.OWNER]: 5
 };
 
 const PAGE_ACCESS = {
-    'dashboard.html':         [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'discovery.html':         [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'events.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'profile-settings.html':  [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'community-page.html':    [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'create-community.html':  [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'report.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'appeal.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
+    'dashboard.html':         [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'discovery.html':         [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'events.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'profile-settings.html':  [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN, ROLES.OWNER],
+    'community-page.html':    [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'create-community.html':  [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'report.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'appeal.html':            [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
     'community-settings.html':[ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
-    'event-approval.html':    [ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
+    'event-approval.html':    [ROLES.COMMUNITY_MANAGER, ROLES.ADMIN], // approving OTHER communities' submitted events stays a community_manager/admin job — organizer only manages its own tournaments (see events.html)
     'mod-panel.html':         [ROLES.MODERATOR, ROLES.ADMIN],
     'admin-dashboard.html':   [ROLES.ADMIN],
-    // chat.html intentionally excluded — feature removed platform-wide
+    'chat.html':              [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
+    'owner-dashboard.html':   [ROLES.OWNER, ROLES.ADMIN],
+    'organizer-dashboard.html': [ROLES.ORGANIZER, ROLES.ADMIN],
+    'event-registrants.html': [ROLES.ORGANIZER, ROLES.COMMUNITY_MANAGER, ROLES.ADMIN],
+    'pricing.html':           [ROLES.USER, ROLES.MODERATOR, ROLES.COMMUNITY_MANAGER, ROLES.ORGANIZER, ROLES.ADMIN],
 };
 
 function normalizeRole(role) {
@@ -47,6 +57,7 @@ function normalizeRole(role) {
     if (value === 'community-manager' || value === 'community manager' || value === 'manager' || value === 'cm') {
         return ROLES.COMMUNITY_MANAGER;
     }
+    if (value === 'organiser') return ROLES.ORGANIZER; // UK spelling alias
     return ROLE_HIERARCHY.includes(value) ? value : ROLES.USER;
 }
 
@@ -63,8 +74,11 @@ function normalizeUser(rawUser) {
     if (!rawUser) return null;
     const names = splitNameParts(rawUser);
     const username = rawUser.username || rawUser.handle || [names.firstName, names.lastName].filter(Boolean).join("").toLowerCase() || "user";
+    const rawId = rawUser.id ?? rawUser.userId ?? rawUser._id;
+    const parsedId = rawId !== undefined && rawId !== null && !isNaN(Number(rawId)) ? Number(rawId) : rawId;
     return {
         ...rawUser,
+        id: parsedId,
         firstName: names.firstName,
         lastName: names.lastName,
         username,
@@ -135,9 +149,10 @@ function renderUserUI() {
     });
 }
 
-function loginUser(username, role) {
+function loginUser(username, role, id = null) {
     const normalizedRole = normalizeRole(role);
     return persistCurrentUser({
+        id: id !== null && id !== undefined ? Number(id) : undefined,
         firstName: username,
         lastName: "",
         username,
@@ -169,6 +184,20 @@ function logoutUser() {
     setTimeout(() => {
         window.location.href = 'landing.html';
     }, 500);
+}
+
+/**
+ * Real, callable enforcement of the PAGE_ACCESS map — call this from a page's
+ * own init code (see chat.js) to gate on whatever PAGE_ACCESS says for the
+ * current page. Pages with their own bespoke access logic (e.g.
+ * community-settings.js's owner-exception) intentionally don't call this —
+ * retrofitting it there would fight logic that's already correct.
+ */
+function enforcePageAccess() {
+    const page = window.location.pathname.split('/').pop();
+    const allowedRoles = PAGE_ACCESS[page];
+    if (!allowedRoles) return true; // no entry for this page — nothing to enforce here
+    return requireRole(allowedRoles);
 }
 
 function requireRole(allowedRoles) {
@@ -271,6 +300,16 @@ function getAccessiblePanels() {
         });
     }
 
+    if (user.role === ROLES.ORGANIZER || user.role === ROLES.ADMIN) {
+        panels.push({
+            id: 'organizer-dashboard',
+            label: 'Organizer Dashboard',
+            icon: '🏆',
+            href: 'organizer-dashboard.html',
+            badgeClass: 'rbac-badge-organizer'
+        });
+    }
+
     if (user.role === ROLES.ADMIN) {
         panels.push({
             id: 'admin-dashboard',
@@ -287,7 +326,9 @@ function getAccessiblePanels() {
 function getRoleDisplay(role) {
     const displays = {
         [ROLES.ADMIN]: { label: 'SYSTEM ADMIN', icon: '🛡️', color: '#ef4444' },
+        [ROLES.OWNER]: { label: 'PLATFORM OWNER', icon: '👑', color: '#eab308' },
         [ROLES.COMMUNITY_MANAGER]: { label: 'COMMUNITY MANAGER', icon: '📅', color: '#06b6d4' },
+        [ROLES.ORGANIZER]: { label: 'ORGANIZER', icon: '🏆', color: '#22c55e' },
         [ROLES.MODERATOR]: { label: 'MODERATOR', icon: '🔍', color: '#f59e0b' },
         [ROLES.USER]: { label: 'USER', icon: '🎮', color: '#8b5cf6' }
     };
@@ -323,6 +364,7 @@ window.loginUser = loginUser;
 window.getCurrentUser = getCurrentUser;
 window.logoutUser = logoutUser;
 window.requireRole = requireRole;
+window.enforcePageAccess = enforcePageAccess;
 window.hasPermission = hasPermission;
 window.hasAccess = hasAccess;
 window.hasMinimumRole = hasMinimumRole;

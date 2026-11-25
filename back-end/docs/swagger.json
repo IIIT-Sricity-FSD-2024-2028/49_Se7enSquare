@@ -1,22 +1,32 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/api/users": {
+    "/api/users/me": {
       "get": {
-        "operationId": "UsersController_findAll",
-        "summary": "List all users",
-        "description": "Returns every user in the in-memory store. Accessible by any valid role.",
+        "operationId": "UsersController_getMe",
+        "summary": "Get current user profile",
+        "description": "Returns the authenticated user record without password or hash. Accessible even if suspended/banned.",
         "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -25,7 +35,206 @@
         ],
         "responses": {
           "200": {
-            "description": "Array of user records",
+            "description": "The sanitized profile of the current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_updateMe",
+        "summary": "Update current user profile",
+        "description": "Partially updates the current user profile. Only whitelisted fields (firstName, lastName, bio, phone, avatar) are updated.",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated user record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{id}/role": {
+      "patch": {
+        "operationId": "UsersController_updateRole",
+        "summary": "Update user role",
+        "description": "Admin-only endpoint to assign or change a user role. Cannot demote yourself or the last remaining admin.",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Target user ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated user record with the new role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "UsersController_findAll",
+        "summary": "List all users",
+        "description": "Returns every user in the database without passwords or hashes.",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Filter users by username, email or name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "communityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of sanitized user records",
             "content": {
               "application/json": {
                 "schema": {
@@ -38,7 +247,7 @@
             }
           },
           "403": {
-            "description": "Missing or invalid x-role header"
+            "description": "Missing or invalid role/identity"
           }
         },
         "tags": [
@@ -48,18 +257,28 @@
       "post": {
         "operationId": "UsersController_create",
         "summary": "Create a new user",
-        "description": "Creates a user record. Requires x-role: admin.",
+        "description": "Creates a user record. Requires admin role.",
         "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -87,9 +306,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Only admin can create users"
           }
         },
         "tags": [
@@ -101,18 +317,28 @@
       "get": {
         "operationId": "UsersController_findOne",
         "summary": "Get a single user by ID",
-        "description": "Fetches one user record by their numeric ID.",
+        "description": "Fetches one sanitized user record by numeric ID.",
         "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -125,6 +351,14 @@
             "description": "Numeric user ID",
             "schema": {
               "type": "number"
+            }
+          },
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -139,72 +373,6 @@
               }
             }
           },
-          "403": {
-            "description": "Missing or invalid x-role header"
-          },
-          "404": {
-            "description": "User not found"
-          }
-        },
-        "tags": [
-          "users"
-        ]
-      },
-      "patch": {
-        "operationId": "UsersController_update",
-        "summary": "Update an existing user",
-        "description": "Partially updates a user (all fields optional). Requires x-role: admin.",
-        "parameters": [
-          {
-            "name": "x-role",
-            "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "admin",
-                "community_manager",
-                "moderator",
-                "user"
-              ]
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Numeric user ID to update",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "description": "Fields to update (all optional)",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The updated user record",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Only admin can update users"
-          },
           "404": {
             "description": "User not found"
           }
@@ -216,18 +384,28 @@
       "delete": {
         "operationId": "UsersController_remove",
         "summary": "Delete a user",
-        "description": "Permanently deletes a user and cascades to their memberships, posts, and reports. Requires x-role: admin.",
+        "description": "Removes a user and associated records. Requires admin role.",
         "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -245,7 +423,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Deletion confirmation",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -255,12 +433,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Only admin can delete users"
-          },
-          "404": {
-            "description": "User not found"
           }
         },
         "tags": [
@@ -277,13 +449,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -320,13 +493,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -373,13 +547,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -425,13 +600,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -483,18 +659,19 @@
       "delete": {
         "operationId": "CommunitiesController_remove",
         "summary": "Delete a community",
-        "description": "Permanently deletes a community and cascades to related memberships and events. Requires x-role: admin.",
+        "description": "Permanently deletes a community and cascades to related memberships and events. Same trust model as create/update — any authenticated role may call this; the frontend is responsible for only showing the Delete action to the community owner or an admin, since there is no per-request user identity to enforce it server-side.",
         "parameters": [
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -524,7 +701,7 @@
             }
           },
           "403": {
-            "description": "Only admin can delete communities"
+            "description": "Missing or invalid x-role header"
           },
           "404": {
             "description": "Community not found"
@@ -532,6 +709,216 @@
         },
         "tags": [
           "communities"
+        ]
+      }
+    },
+    "/api/subscriptions": {
+      "get": {
+        "operationId": "SubscriptionsController_findAll",
+        "summary": "Breakdown of active subscriptions by plan, plus the list of current premium subscribers",
+        "description": "Admin/Owner only — powers the Owner dashboard's Subscriptions drill-down.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any non-owner role may manage its own subscription.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/api/subscriptions/status": {
+      "get": {
+        "operationId": "SubscriptionsController_status",
+        "summary": "Get a user's current subscription plan",
+        "description": "Defaults to the free plan if the user has never subscribed.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any non-owner role may manage its own subscription.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 4,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/api/subscriptions/upgrade": {
+      "post": {
+        "operationId": "SubscriptionsController_upgrade",
+        "summary": "Upgrade (or change) a subscription plan",
+        "description": "Free → Plus → Ultra Pro. Logs a simulated payment for paid plans.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any non-owner role may manage its own subscription.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new active subscription record"
+          }
+        },
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/api/subscriptions/cancel": {
+      "post": {
+        "operationId": "SubscriptionsController_cancel",
+        "summary": "Cancel a subscription",
+        "description": "Reverts the user to the free plan.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any non-owner role may manage its own subscription.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "Subscription for user 4 reverted to free plan"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/api/payments/history": {
+      "get": {
+        "operationId": "PaymentsController_history",
+        "summary": "Get a user's payment history",
+        "description": "Simulated ledger entries — no real payment gateway is involved.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. /history is open to any authenticated role (scoped to their own userId). /summary requires owner or admin.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Filter to one user; omitted returns everything (admin/owner use).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of payment records"
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/summary": {
+      "get": {
+        "operationId": "PaymentsController_summary",
+        "summary": "Get aggregate revenue summary",
+        "description": "Totals by type/month — feeds the Owner revenue dashboard.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. /history is open to any authenticated role (scoped to their own userId). /summary requires owner or admin.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue summary totals"
+          }
+        },
+        "tags": [
+          "payments"
         ]
       }
     },
@@ -544,13 +931,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET / POST require any valid role. PATCH requires community_manager or admin. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -569,6 +957,15 @@
                 "cancelled"
               ],
               "type": "string"
+            }
+          },
+          {
+            "name": "includeSuspended",
+            "required": false,
+            "in": "query",
+            "description": "Include events belonging to suspended communities",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -602,13 +999,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET / POST require any valid role. PATCH requires community_manager or admin. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -655,13 +1053,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET / POST require any valid role. PATCH requires community_manager or admin. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -702,18 +1101,19 @@
       "patch": {
         "operationId": "EventsController_update",
         "summary": "Update an event",
-        "description": "Partially updates an event and supports approve/reject status changes. Requires community_manager or admin.",
+        "description": "Partially updates an event and supports approve/reject status changes. Requires community_manager, organizer, or admin.",
         "parameters": [
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET / POST require any valid role. PATCH requires community_manager or admin. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -752,7 +1152,7 @@
             }
           },
           "403": {
-            "description": "Only community_manager or admin can update events"
+            "description": "Only community_manager, organizer, or admin can update events"
           },
           "404": {
             "description": "Event not found"
@@ -770,13 +1170,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET / POST require any valid role. PATCH requires community_manager or admin. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -817,6 +1218,54 @@
         ]
       }
     },
+    "/api/events/{id}/registrants": {
+      "get": {
+        "operationId": "EventsController_getRegistrants",
+        "summary": "List an event's registrants",
+        "description": "Returns every registration for this event joined with the registrant's username and the contact details given at registration time. Requires community_manager, organizer, or admin.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET / POST require any valid role. PATCH requires community_manager, organizer, or admin. DELETE requires admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Numeric event ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event title plus an array of registrants"
+          },
+          "403": {
+            "description": "Only community_manager, organizer, or admin can view registrants"
+          },
+          "404": {
+            "description": "Event not found"
+          }
+        },
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/reports": {
       "get": {
         "operationId": "ReportsController_findAll",
@@ -826,13 +1275,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -869,13 +1319,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -922,13 +1373,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -987,13 +1439,14 @@
           {
             "name": "x-role",
             "in": "header",
-            "description": "RBAC role header. Accepted values: admin | community_manager | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
             "required": true,
             "schema": {
               "type": "string",
               "enum": [
                 "admin",
                 "community_manager",
+                "organizer",
                 "moderator",
                 "user"
               ]
@@ -1046,6 +1499,14 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "communityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
             }
           }
         ],
@@ -1237,6 +1698,42 @@
         ]
       }
     },
+    "/api/dashboard/landing-stats": {
+      "get": {
+        "operationId": "DashboardController_getLandingStats",
+        "summary": "Get public landing page stats",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "Role for RBAC: admin | moderator | user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "totalUsers": 7,
+                    "totalCommunities": 3,
+                    "totalMessages": 4
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
     "/api/dashboard/stats": {
       "get": {
         "operationId": "DashboardController_getStats",
@@ -1262,6 +1759,32 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/api/dashboard/revenue": {
+      "get": {
+        "operationId": "DashboardController_getRevenue",
+        "summary": "Get revenue overview",
+        "description": "Owner/Admin only — total/monthly revenue, subscription/organiser/featured-event revenue, premium user counts.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "Role for RBAC: admin | moderator | user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         },
         "tags": [
@@ -1411,10 +1934,45 @@
         ]
       }
     },
+    "/api/auth/change-password": {
+      "post": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/register": {
       "post": {
         "operationId": "AuthController_register",
+        "summary": "Register a new user account",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1428,7 +1986,43 @@
     "/api/auth/login": {
       "post": {
         "operationId": "AuthController_login",
+        "summary": "Sign in with username/email and password",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/google": {
+      "post": {
+        "operationId": "AuthController_googleAuth",
+        "summary": "Sign in or register with verified Google credential",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1508,7 +2102,16 @@
     "/api/appeals": {
       "get": {
         "operationId": "AppealsController_findAll",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -1521,6 +2124,16 @@
       "post": {
         "operationId": "AppealsController_create",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAppealDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1544,6 +2157,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAppealEvidenceDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1551,6 +2174,161 @@
         },
         "tags": [
           "appeals"
+        ]
+      }
+    },
+    "/api/appeals/{id}/status": {
+      "patch": {
+        "operationId": "AppealsController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppealStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "appeals"
+        ]
+      }
+    },
+    "/api/appeals/{id}/approved": {
+      "post": {
+        "operationId": "AppealsController_approveAppealPost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "appeals"
+        ]
+      }
+    },
+    "/api/appeals/{id}/rejected": {
+      "post": {
+        "operationId": "AppealsController_rejectAppealPost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "appeals"
+        ]
+      }
+    },
+    "/api/appeals/{id}/{status}": {
+      "post": {
+        "operationId": "AppealsController_reviewAppealPost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "appeals"
+        ]
+      }
+    },
+    "/api/messages": {
+      "get": {
+        "operationId": "MessagesController_findAll",
+        "parameters": [
+          {
+            "name": "communityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "channelId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "messages"
+        ]
+      },
+      "post": {
+        "operationId": "MessagesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "messages"
         ]
       }
     },
@@ -1577,20 +2355,6 @@
         ]
       }
     },
-    "/api/messages": {
-      "post": {
-        "operationId": "MessagesController_create",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "messages"
-        ]
-      }
-    },
     "/api/messages/{id}/reactions": {
       "post": {
         "operationId": "MessagesController_react",
@@ -1604,6 +2368,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactMessageDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1650,6 +2424,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMessageAttachmentDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1676,6 +2460,16 @@
       "post": {
         "operationId": "AuditController_create",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAuditDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1702,6 +2496,16 @@
       "patch": {
         "operationId": "PlatformConfigController_update",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlatformConfigDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -1711,10 +2515,1131 @@
           "platform-config"
         ]
       }
+    },
+    "/api/uploads": {
+      "post": {
+        "operationId": "UploadController_uploadFile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "operationId": "NotificationsController_findAll",
+        "summary": "List notifications for a user, newest first",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of notifications for the given userId"
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "operationId": "NotificationsController_markAllRead",
+        "summary": "Mark every notification for a user as read",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkAllReadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/{id}": {
+      "patch": {
+        "operationId": "NotificationsController_update",
+        "summary": "Mark a single notification read/unread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/organisers": {
+      "get": {
+        "operationId": "OrganisersController_findAll",
+        "summary": "List all organiser applications",
+        "description": "Admin (approval queue) / Owner (read-only stats drill-down).",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "verified",
+                "rejected"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/organisers/apply": {
+      "post": {
+        "operationId": "OrganisersController_apply",
+        "summary": "Apply to become a Verified Organizer",
+        "description": "Creates a pending application. Does not itself grant the organizer role — see PATCH /:id.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyOrganiserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/organisers/{id}": {
+      "patch": {
+        "operationId": "OrganisersController_setStatus",
+        "summary": "Verify or reject an organiser application",
+        "description": "Admin-only. On verification, also flips the applicant's account role to organizer.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrganiserStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/organisers/profile": {
+      "get": {
+        "operationId": "OrganisersController_profile",
+        "summary": "Get a user's organiser application/plan status",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 6
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Application status, plan, and plan limits"
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/organisers/analytics": {
+      "get": {
+        "operationId": "OrganisersController_analytics",
+        "summary": "Get an organiser's tournament analytics",
+        "description": "Aggregates their own events/registrations — same scoping as the Organizer Dashboard.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 6,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/organisers/subscription/upgrade": {
+      "post": {
+        "operationId": "OrganisersController_upgradePlan",
+        "summary": "Upgrade the organiser subscription tier",
+        "description": "Free Organizer → Premium Organizer. Logs a simulated payment.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. apply/profile/analytics/subscription-upgrade: user | organizer | admin. PATCH :id (verify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeOrganiserPlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "organisers"
+        ]
+      }
+    },
+    "/api/featured-events": {
+      "get": {
+        "operationId": "FeaturedEventsController_findAll",
+        "summary": "List currently-active featured (promoted) events",
+        "description": "Powers the Discover page carousel — each entry includes the joined event record.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. GET is open to any role (Discover page). POST requires organizer | community_manager | admin. DELETE requires admin.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of active featured-event records with their event data"
+          }
+        },
+        "tags": [
+          "featured-events"
+        ]
+      },
+      "post": {
+        "operationId": "FeaturedEventsController_create",
+        "summary": "Promote an event to the Discover carousel",
+        "description": "Simulated pay-to-promote purchase — logs a payment.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. GET is open to any role (Discover page). POST requires organizer | community_manager | admin. DELETE requires admin.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeaturedEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "featured-events"
+        ]
+      }
+    },
+    "/api/featured-events/{id}": {
+      "delete": {
+        "operationId": "FeaturedEventsController_remove",
+        "summary": "Remove a featured-event promotion",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. GET is open to any role (Discover page). POST requires organizer | community_manager | admin. DELETE requires admin.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "featured-events"
+        ]
+      }
+    },
+    "/api/moderator-certification": {
+      "get": {
+        "operationId": "ModeratorCertificationController_findAll",
+        "summary": "List all moderator applications",
+        "description": "Admin-only — powers the approval queue.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. quiz/apply/status: user | organizer | admin. PATCH :id (certify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "certified",
+                "rejected"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "moderator-certification"
+        ]
+      }
+    },
+    "/api/moderator-certification/quiz": {
+      "get": {
+        "operationId": "ModeratorCertificationController_quiz",
+        "summary": "Get the moderation quiz questions",
+        "description": "Answer key is never returned — score via POST /apply.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. quiz/apply/status: user | organizer | admin. PATCH :id (certify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "moderator-certification"
+        ]
+      }
+    },
+    "/api/moderator-certification/apply": {
+      "post": {
+        "operationId": "ModeratorCertificationController_apply",
+        "summary": "Submit the moderation quiz to apply for Certified Moderator status",
+        "description": "Scoring ≥70% moves to pending admin review; below 70% is rejected immediately and may be retaken.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. quiz/apply/status: user | organizer | admin. PATCH :id (certify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitQuizDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "moderator-certification"
+        ]
+      }
+    },
+    "/api/moderator-certification/{id}": {
+      "patch": {
+        "operationId": "ModeratorCertificationController_setStatus",
+        "summary": "Certify or reject a moderator application",
+        "description": "Admin-only. On certification, also flips the applicant's account role to moderator.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. quiz/apply/status: user | organizer | admin. PATCH :id (certify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateModeratorStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "moderator-certification"
+        ]
+      }
+    },
+    "/api/moderator-certification/status": {
+      "get": {
+        "operationId": "ModeratorCertificationController_status",
+        "summary": "Get a user's moderator application status",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. quiz/apply/status: user | organizer | admin. PATCH :id (certify/reject) requires admin only.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 4
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Application status and quiz score"
+          }
+        },
+        "tags": [
+          "moderator-certification"
+        ]
+      }
+    },
+    "/api/ratings": {
+      "post": {
+        "operationId": "RatingsController_create",
+        "summary": "Rate an organiser or moderator",
+        "description": "Doc §13 — player ratings feed the organiser/moderator trust score.",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any authenticated role may rate an organiser/moderator they interacted with.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRatingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ratings"
+        ]
+      },
+      "get": {
+        "operationId": "RatingsController_forTarget",
+        "summary": "Get ratings + average for an organiser or moderator",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any authenticated role may rate an organiser/moderator they interacted with.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "organiser",
+                "moderator"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetUserId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 6,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Average score, count, and the individual rating records"
+          }
+        },
+        "tags": [
+          "ratings"
+        ]
+      }
+    },
+    "/api/users/{id}/sanctions": {
+      "get": {
+        "operationId": "SanctionsController_listForUser",
+        "summary": "List all sanctions for a user (admin/moderator only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of SanctionRecord"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/users/{id}/suspend": {
+      "post": {
+        "operationId": "SanctionsController_suspend",
+        "summary": "Suspend a user (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "reason": "Violation of community guidelines",
+                  "endsAt": "2026-11-01T00:00:00Z"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sanction created, user status set to suspended"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/users/{id}/ban": {
+      "post": {
+        "operationId": "SanctionsController_ban",
+        "summary": "Ban a user permanently (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "reason": "Repeated policy violations"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sanction created, user status set to banned"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/users/{id}/reinstate": {
+      "post": {
+        "operationId": "SanctionsController_reinstate",
+        "summary": "Reinstate a suspended or banned user (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "reason": "Appeal approved"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User status reset to active, active sanctions reversed"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/sanctions/mine": {
+      "get": {
+        "operationId": "SanctionsMineController_findMine",
+        "summary": "Get current user sanctions (including suspended/banned users)",
+        "description": "Whitelisted by AuthContextGuard — accessible even when account is restricted.",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of SanctionRecord for the current user"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/sanctions": {
+      "post": {
+        "operationId": "SanctionsMineController_create",
+        "summary": "Create a sanction (admin or moderator)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSanctionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sanction record created"
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/sanctions/{id}/reverse": {
+      "post": {
+        "operationId": "SanctionsMineController_reverse",
+        "summary": "Reverse an active sanction (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sanctions"
+        ]
+      }
+    },
+    "/api/admin/communities/{id}/suspend": {
+      "post": {
+        "operationId": "AdminCommunitiesController_suspend",
+        "summary": "Suspend a community (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "reason": "Repeated policy violations"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Community suspended, sanction written, owner notified"
+          }
+        },
+        "tags": [
+          "admin-communities"
+        ]
+      }
+    },
+    "/api/admin/communities/{id}/reinstate": {
+      "post": {
+        "operationId": "AdminCommunitiesController_reinstate",
+        "summary": "Reinstate a suspended community (admin only)",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Requesting user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "reason": "Appeal approved"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Community reinstated, active suspension sanctions reversed"
+          }
+        },
+        "tags": [
+          "admin-communities"
+        ]
+      }
     }
   },
   "info": {
-    "title": "Se7enSquare Backend API",
+    "title": "Gameunity Backend API",
     "description": "In-memory NestJS backend for frontend integration and academic evaluation",
     "version": "1.0",
     "contact": {}
@@ -1755,22 +3680,105 @@
             "type": "string",
             "enum": [
               "admin",
+              "owner",
               "community_manager",
+              "organizer",
               "moderator",
               "user",
               "gamer"
             ],
             "example": "user"
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "banned"
+            ],
+            "example": "active"
+          },
           "bio": {
             "type": "string",
             "example": "Casual and competitive gamer"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Alex"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Morgan"
+          },
+          "avatar": {
+            "type": "object",
+            "example": "/uploads/avatar.png"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-01-01T00:00:00.000Z"
+          },
+          "privacy": {
+            "type": "object",
+            "example": {
+              "showActivity": true,
+              "allowDMs": true
+            }
           }
         },
         "required": [
           "id",
           "username",
           "email",
+          "role",
+          "status"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Alex"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Morgan"
+          },
+          "bio": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 160,
+            "example": "Loves MMORPG and FPS."
+          },
+          "phone": {
+            "type": "string",
+            "example": "+91 98765 43210"
+          },
+          "avatar": {
+            "type": "object",
+            "example": "/uploads/1234-avatar.png"
+          }
+        }
+      },
+      "UpdateRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "owner",
+              "community_manager",
+              "organizer",
+              "moderator",
+              "user",
+              "gamer"
+            ],
+            "example": "moderator"
+          }
+        },
+        "required": [
           "role"
         ]
       },
@@ -1791,7 +3799,9 @@
             "type": "string",
             "enum": [
               "admin",
+              "owner",
               "community_manager",
+              "organizer",
               "moderator",
               "user",
               "gamer"
@@ -1803,6 +3813,23 @@
             "minLength": 5,
             "maxLength": 160,
             "example": "Loves MMORPG and FPS."
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Alex"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "May be empty for single-word full names",
+            "example": "Morgan"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+91 98765 43210"
+          },
+          "avatar": {
+            "type": "string",
+            "example": "/uploads/1234-avatar.png"
           }
         },
         "required": [
@@ -1810,38 +3837,6 @@
           "email",
           "role"
         ]
-      },
-      "UpdateUserDto": {
-        "type": "object",
-        "properties": {
-          "username": {
-            "type": "string",
-            "minLength": 3,
-            "maxLength": 30,
-            "example": "newplayer"
-          },
-          "email": {
-            "type": "string",
-            "example": "newplayer@example.com"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "admin",
-              "community_manager",
-              "moderator",
-              "user",
-              "gamer"
-            ],
-            "example": "user"
-          },
-          "bio": {
-            "type": "string",
-            "minLength": 5,
-            "maxLength": 160,
-            "example": "Loves MMORPG and FPS."
-          }
-        }
       },
       "CommunityDto": {
         "type": "object",
@@ -1956,14 +3951,67 @@
           },
           "channels": {
             "example": [
-              "general",
-              "fps-chat"
+              {
+                "id": "general",
+                "name": "general",
+                "type": "Text",
+                "topic": "General discussion"
+              }
             ],
-            "description": "Channels created in the community wizard",
+            "description": "Channels created in the community wizard or settings",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "banner": {
+            "type": "string",
+            "example": "/uploads/1234-banner.png"
+          },
+          "bannerImage": {
+            "type": "string",
+            "example": "/uploads/1234-banner.png",
+            "description": "Alias of banner kept for frontend compatibility"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ],
+            "example": "public"
+          },
+          "rules": {
+            "example": [
+              "Be respectful",
+              "Stay on topic"
+            ],
+            "description": "Owner-editable community rules — the UI falls back to generic defaults when this is empty",
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "icon": {
+            "type": "string",
+            "example": "⚡",
+            "description": "Emoji or image URL shown as the community icon"
+          },
+          "category": {
+            "type": "string",
+            "example": "Gaming"
+          },
+          "slug": {
+            "type": "string",
+            "example": "moba-masters"
+          },
+          "memberCount": {
+            "type": "number",
+            "example": 1
+          },
+          "onlineCount": {
+            "type": "number",
+            "example": 1
           }
         },
         "required": [
@@ -2004,16 +4052,133 @@
           },
           "channels": {
             "example": [
-              "general",
-              "fps-chat"
+              {
+                "id": "general",
+                "name": "general",
+                "type": "Text",
+                "topic": "General discussion"
+              }
             ],
-            "description": "Channels created in the community wizard",
+            "description": "Channels created in the community wizard or settings",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "banner": {
+            "type": "string",
+            "example": "/uploads/1234-banner.png"
+          },
+          "bannerImage": {
+            "type": "string",
+            "example": "/uploads/1234-banner.png",
+            "description": "Alias of banner kept for frontend compatibility"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ],
+            "example": "public"
+          },
+          "rules": {
+            "example": [
+              "Be respectful",
+              "Stay on topic"
+            ],
+            "description": "Owner-editable community rules — the UI falls back to generic defaults when this is empty",
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "icon": {
+            "type": "string",
+            "example": "⚡",
+            "description": "Emoji or image URL shown as the community icon"
+          },
+          "category": {
+            "type": "string",
+            "example": "Gaming"
+          },
+          "slug": {
+            "type": "string",
+            "example": "moba-masters"
+          },
+          "memberCount": {
+            "type": "number",
+            "example": 1
+          },
+          "onlineCount": {
+            "type": "number",
+            "example": 1
           }
         }
+      },
+      "SubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "example": "plus",
+            "enum": [
+              "free",
+              "plus",
+              "ultra_pro"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "active",
+            "enum": [
+              "active",
+              "cancelled"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "example": "2026-05-01T09:00:00.000Z"
+          }
+        },
+        "required": [
+          "plan",
+          "status"
+        ]
+      },
+      "UpgradeSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "number",
+            "example": 4
+          },
+          "plan": {
+            "type": "string",
+            "example": "plus",
+            "enum": [
+              "free",
+              "plus",
+              "ultra_pro"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "plan"
+        ]
+      },
+      "CancelSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "number",
+            "example": 4
+          }
+        },
+        "required": [
+          "userId"
+        ]
       },
       "EventDto": {
         "type": "object",
@@ -2061,6 +4226,18 @@
           "createdBy": {
             "type": "string",
             "example": "Rajat"
+          },
+          "organiserId": {
+            "type": "number",
+            "example": 6
+          },
+          "entryFee": {
+            "type": "number",
+            "example": 100
+          },
+          "prizePool": {
+            "type": "number",
+            "example": 30000
           }
         },
         "required": [
@@ -2130,6 +4307,21 @@
           "createdBy": {
             "type": "string",
             "example": "Rajat"
+          },
+          "organiserId": {
+            "type": "number",
+            "example": 6,
+            "description": "Links to the organiser's user id — used for organizer-plan limit checks (createdBy is just a display string)"
+          },
+          "entryFee": {
+            "type": "number",
+            "example": 100,
+            "description": "₹ per player — doc §16 revenue sharing. 0/omitted means a free event."
+          },
+          "prizePool": {
+            "type": "number",
+            "example": 30000,
+            "description": "₹ displayed to players — set directly by the organiser, not auto-derived from entryFee."
           },
           "category": {
             "type": "string",
@@ -2206,6 +4398,21 @@
           "createdBy": {
             "type": "string",
             "example": "Rajat"
+          },
+          "organiserId": {
+            "type": "number",
+            "example": 6,
+            "description": "Links to the organiser's user id — used for organizer-plan limit checks (createdBy is just a display string)"
+          },
+          "entryFee": {
+            "type": "number",
+            "example": 100,
+            "description": "₹ per player — doc §16 revenue sharing. 0/omitted means a free event."
+          },
+          "prizePool": {
+            "type": "number",
+            "example": 30000,
+            "description": "₹ displayed to players — set directly by the organiser, not auto-derived from entryFee."
           },
           "category": {
             "type": "string",
@@ -2315,6 +4522,10 @@
               "resolved"
             ],
             "example": "reviewed"
+          },
+          "resolutionNote": {
+            "type": "string",
+            "example": "Resolved: Violation confirmed"
           }
         },
         "required": [
@@ -2427,13 +4638,33 @@
           "pendingReportsCount": {
             "type": "number",
             "example": 2
+          },
+          "pendingAppealsCount": {
+            "type": "number",
+            "example": 1
+          },
+          "pendingEventsCount": {
+            "type": "number",
+            "example": 1
+          },
+          "totalMemberships": {
+            "type": "number",
+            "example": 4
+          },
+          "totalMessages": {
+            "type": "number",
+            "example": 12
           }
         },
         "required": [
           "totalUsers",
           "totalCommunities",
           "totalEvents",
-          "pendingReportsCount"
+          "pendingReportsCount",
+          "pendingAppealsCount",
+          "pendingEventsCount",
+          "totalMemberships",
+          "totalMessages"
         ]
       },
       "CreateMembershipDto": {
@@ -2454,6 +4685,435 @@
           "userId",
           "communityId"
         ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "example": "player01"
+          },
+          "email": {
+            "type": "string",
+            "example": "player01@gameunity.local"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "example": "Demo@123"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "owner",
+              "community_manager",
+              "organizer",
+              "moderator",
+              "user",
+              "gamer"
+            ],
+            "example": "user"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Player"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "May be empty for single-word full names",
+            "example": "One"
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "type": "string",
+            "description": "Email or username",
+            "example": "player01"
+          },
+          "password": {
+            "type": "string",
+            "example": "Demo@123"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "owner",
+              "community_manager",
+              "organizer",
+              "moderator",
+              "user",
+              "gamer"
+            ],
+            "example": "user"
+          }
+        },
+        "required": [
+          "login",
+          "password"
+        ]
+      },
+      "GoogleAuthDto": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "Google ID Token (credential JWT) returned by Google Identity Services",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "Google OAuth2 access token returned by Google OAuth2 token client",
+            "example": "ya29.a0AfH6SMC..."
+          }
+        }
+      },
+      "CreateAppealDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "number",
+            "example": 4
+          },
+          "actionId": {
+            "type": "string",
+            "example": "ACT-DNX-2025-003847"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 1000,
+            "example": "I believe this action was taken in error because..."
+          },
+          "acknowledgement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "I understand the action but disagree with it"
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Reverse the action"
+          },
+          "evidence": {
+            "example": [
+              "evidence-1.png"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "text",
+          "acknowledgement",
+          "resolution"
+        ]
+      },
+      "AddAppealEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "example": "screenshot.png"
+          },
+          "url": {
+            "type": "string",
+            "example": "/uploads/1234-screenshot.png"
+          }
+        }
+      },
+      "UpdateAppealStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "reviewed",
+              "approved",
+              "rejected"
+            ],
+            "example": "approved"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "CreateMessageDto": {
+        "type": "object",
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "example": "general"
+          },
+          "communityId": {
+            "type": "number",
+            "example": 1
+          },
+          "authorId": {
+            "type": "number",
+            "example": 4
+          },
+          "authorName": {
+            "type": "string",
+            "example": "player01"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "example": "Anyone queueing ranked tonight?"
+          },
+          "attachments": {
+            "example": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "channelId",
+          "content"
+        ]
+      },
+      "ReactMessageDto": {
+        "type": "object",
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "example": "👍"
+          },
+          "actorId": {
+            "type": "number",
+            "description": "Who is reacting — used only to notify the message author",
+            "example": 5
+          },
+          "actorName": {
+            "type": "string",
+            "example": "player01"
+          }
+        }
+      },
+      "AddMessageAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "example": "screenshot.png"
+          },
+          "url": {
+            "type": "string",
+            "example": "/uploads/1234-screenshot.png"
+          }
+        }
+      },
+      "CreateAuditDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100,
+            "example": "Community Created"
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "example": "admin01"
+          },
+          "target": {
+            "type": "string",
+            "example": "FPS Arena"
+          },
+          "reason": {
+            "type": "string",
+            "example": "Seed community"
+          }
+        },
+        "required": [
+          "action",
+          "actor"
+        ]
+      },
+      "UpdatePlatformConfigDto": {
+        "type": "object",
+        "properties": {
+          "registrationEnabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "eventApprovalRequired": {
+            "type": "boolean",
+            "example": true
+          },
+          "reportEscalationEnabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "maxEventCapacity": {
+            "type": "number",
+            "example": 500
+          },
+          "autoModEnabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "maxChannelsPerCommunity": {
+            "type": "number",
+            "example": 50
+          },
+          "maxCommunitiesPerUser": {
+            "type": "number",
+            "example": 10
+          }
+        }
+      },
+      "MarkAllReadDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "number",
+            "example": 5
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "UpdateNotificationDto": {
+        "type": "object",
+        "properties": {
+          "read": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "read"
+        ]
+      },
+      "ApplyOrganiserDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateOrganiserStatusDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpgradeOrganiserPlanDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "number",
+            "example": 6
+          },
+          "plan": {
+            "type": "string",
+            "example": "premium",
+            "enum": [
+              "free",
+              "premium"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "plan"
+        ]
+      },
+      "CreateFeaturedEventDto": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "number",
+            "example": 1
+          },
+          "userId": {
+            "type": "number",
+            "example": 6
+          },
+          "durationDays": {
+            "type": "number",
+            "example": 7,
+            "description": "How many days the promotion runs (default 7)"
+          }
+        },
+        "required": [
+          "eventId",
+          "userId"
+        ]
+      },
+      "SubmitQuizDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateModeratorStatusDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateRatingDto": {
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "type": "string",
+            "example": "organiser",
+            "enum": [
+              "organiser",
+              "moderator"
+            ]
+          },
+          "targetUserId": {
+            "type": "number",
+            "example": 6
+          },
+          "raterId": {
+            "type": "number",
+            "example": 4
+          },
+          "score": {
+            "type": "number",
+            "example": 5,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string",
+            "example": "Ran a smooth, well-organized tournament."
+          }
+        },
+        "required": [
+          "targetType",
+          "targetUserId",
+          "raterId",
+          "score"
+        ]
+      },
+      "CreateSanctionDto": {
+        "type": "object",
+        "properties": {}
       }
     }
   }

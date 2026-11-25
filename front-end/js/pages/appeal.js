@@ -26,11 +26,15 @@ const validateForm = (data) => {
 };
 
 /**
- * Mock function to simulate file uploading
+ * Uploads a file to the backend via POST /api/uploads and returns the
+ * stored file's URL. Throws if the upload fails.
  */
-const mockFileUpload = (fileName) => {
-    console.log(`Uploading ${fileName}...`);
-    return new Promise(resolve => setTimeout(resolve, 800));
+const uploadEvidenceFile = async (file) => {
+    if (!window.API?.uploads) {
+        throw new Error('Upload API unavailable');
+    }
+    const result = await window.API.uploads.upload(file);
+    return result.fileUrl;
 };
 
 // ==========================================
@@ -70,9 +74,10 @@ window.handleFileUpload = async function(event) {
         container.appendChild(chip);
 
         try {
-            await mockFileUpload(file.name);
+            const fileUrl = await uploadEvidenceFile(file);
             chip.innerHTML = `📄 ${file.name} <span class="file-chip-remove" onclick="removeFile(this)">✕</span>`;
-            uploadedEvidence.push(file.name);
+            chip.dataset.fileUrl = fileUrl;
+            uploadedEvidence.push(fileUrl);
             attachmentCount++;
         } catch (err) {
             chip.remove();
@@ -133,8 +138,9 @@ window.submitAppeal = async function() {
     submitBtn.disabled = true;
 
     try {
+        let created = null;
         if (window.API?.appeals) {
-            await window.API.appeals.create(formData);
+            created = await window.API.appeals.create(formData);
         } else {
             await new Promise(resolve => setTimeout(resolve, 1500));
         }
@@ -142,6 +148,9 @@ window.submitAppeal = async function() {
         // Transition to Success State
         document.getElementById('formWrap').style.display = 'none';
         document.getElementById('successWrap').classList.add('show');
+
+        const refEl = document.getElementById('appealRefId');
+        if (refEl) refEl.textContent = created?.id ? `APL-${created.id}` : 'pending sync';
         
         // Scroll to top of the wrap
         const pageWrap = document.querySelector('.page-wrap');

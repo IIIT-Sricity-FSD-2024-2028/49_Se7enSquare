@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { db, nextId, ReportRecord } from '../../common/utils/in-memory-db';
+import { db, nextId, saveDb, ReportRecord } from '../../common/utils/in-memory-db';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ReportStatus, ReportTargetType } from './dto/report.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReportsService {
@@ -32,10 +33,11 @@ export class ReportsService {
     };
 
     db.reports.push(created);
+    saveDb();
     return created;
   }
 
-  updateStatus(id: number, status: ReportStatus): ReportRecord {
+  updateStatus(id: number, status: ReportStatus, resolutionNote?: string): ReportRecord {
     const report = this.findOne(id);
 
     const allowedTransitions: Record<ReportStatus, ReportStatus | null> = {
@@ -59,6 +61,29 @@ export class ReportsService {
     if (status === ReportStatus.ESCALATED) {
       report.escalatedTo = 'admin';
     }
+    if (resolutionNote) {
+      report.resolutionNote = resolutionNote;
+    }
+    saveDb();
+
+    if (status === ReportStatus.RESOLVED || status === ReportStatus.ESCALATED) {
+      NotificationsService.push({
+        userId: report.reporterId,
+        type: 'report_status',
+        text: `Your report on ${report.targetType} #${report.targetId} was ${status}${resolutionNote ? `: ${resolutionNote}` : ''}`,
+        targetId: report.id,
+      });
+
+      if (report.targetType === ReportTargetType.USER && report.targetId) {
+        NotificationsService.push({
+          userId: report.targetId,
+          type: 'report_status',
+          text: `A report concerning your account was ${status}${resolutionNote ? `: ${resolutionNote}` : ''}`,
+          targetId: report.id,
+        });
+      }
+    }
+
     return report;
   }
 
@@ -77,6 +102,7 @@ export class ReportsService {
   remove(id: number): { message: string } {
     this.findOne(id);
     db.reports = db.reports.filter((item) => item.id !== id);
+    saveDb();
     return { message: `Report ${id} deleted` };
   }
 }

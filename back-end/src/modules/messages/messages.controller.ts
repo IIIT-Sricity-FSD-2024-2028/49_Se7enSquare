@@ -1,7 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
+import { AddMessageAttachmentDto } from './dto/add-message-attachment.dto';
+import { CreateMessageDto } from './dto/create-message.dto';
+import { ReactMessageDto } from './dto/react-message.dto';
 import { MessagesService } from './messages.service';
 
 @ApiTags('messages')
@@ -9,33 +13,47 @@ import { MessagesService } from './messages.service';
 export class MessagesController {
   constructor(private readonly service: MessagesService) {}
 
+  @Get('messages')
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  @ApiQuery({ name: 'communityId', required: false })
+  @ApiQuery({ name: 'channelId', required: false })
+  findAll(@Query('communityId') communityId?: string, @Query('channelId') channelId?: string) {
+    return this.service.findAll(communityId ? Number(communityId) : undefined, channelId);
+  }
+
   @Get('channels/:id/messages')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
   findByChannel(@Param('id') channelId: string) {
     return this.service.findByChannel(channelId);
   }
 
   @Post('messages')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
-  create(@Body() payload: any) {
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  create(@Body() payload: CreateMessageDto) {
     return this.service.create(payload);
   }
 
   @Post('messages/:id/reactions')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
-  react(@Param('id', ParseIntPipe) id: number, @Body() payload: any) {
-    return this.service.react(id, payload.emoji || '👍');
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
+  react(@Param('id', ParseIntPipe) id: number, @Body() payload: ReactMessageDto) {
+    return this.service.react(id, payload.emoji || '👍', payload.actorId, payload.actorName);
+  }
+
+  @Delete('messages/:id')
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.service.remove(id, userId);
   }
 
   @Patch('messages/:id/pin')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
   pin(@Param('id', ParseIntPipe) id: number) {
     return this.service.pin(id);
   }
 
   @Post('messages/:id/attachments')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
-  addAttachment(@Param('id', ParseIntPipe) id: number, @Body() payload: any) {
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
+  addAttachment(@Param('id', ParseIntPipe) id: number, @Body() payload: AddMessageAttachmentDto) {
     return this.service.addAttachment(id, payload.fileName || payload.url || 'attachment');
   }
 }

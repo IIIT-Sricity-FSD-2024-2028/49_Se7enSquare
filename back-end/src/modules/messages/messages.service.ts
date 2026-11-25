@@ -1,8 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ChatMessageRecord, db, nextId, saveDb } from '../../common/utils/in-memory-db';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MessagesService {
+  remove(id: number, userId: number): { id: number } {
+    const index = db.messages.findIndex((item) => item.id === id && item.authorId === userId);
+    if (index === -1) throw new NotFoundException('No removable record found');
+    db.messages.splice(index, 1);
+    saveDb();
+    return { id };
+  }
+
+  findAll(communityId?: number, channelId?: string): ChatMessageRecord[] {
+    return db.messages.filter((item) =>
+      (!communityId || item.communityId === communityId) &&
+      (!channelId || item.channelId === channelId),
+    );
+  }
+
   findByChannel(channelId: string): ChatMessageRecord[] {
     return db.messages.filter((item) => item.channelId === channelId);
   }
@@ -25,12 +41,34 @@ export class MessagesService {
     return created;
   }
 
-  react(id: number, emoji: string): ChatMessageRecord {
+  react(id: number, emoji: string, actorId?: number, actorName?: string): ChatMessageRecord {
     const message = this.findOne(id);
-    message.reactions[emoji] = (message.reactions[emoji] || 0) + 1;
+    if (!message.reactions) {
+      message.reactions = {};
+    }
+    const existing = Array.isArray(message.reactions[emoji]) ? message.reactions[emoji] : [];
+    const userId = actorId || 1;
+    if (existing.includes(userId)) {
+      message.reactions[emoji] = existing.filter((uid) => uid !== userId);
+    } else {
+      message.reactions[emoji] = [...existing, userId];
+    }
     saveDb();
+
+    // Notify the message's author, unless they reacted to their own message.
+    if (message.authorId && actorId && String(actorId) !== String(message.authorId)) {
+      NotificationsService.push({
+        userId: message.authorId,
+        type: 'reaction',
+        text: `${actorName || 'Someone'} reacted ${emoji} to your message`,
+        channelId: message.channelId,
+        targetId: message.id,
+      });
+    }
+
     return message;
   }
+
 
   pin(id: number): ChatMessageRecord {
     const message = this.findOne(id);

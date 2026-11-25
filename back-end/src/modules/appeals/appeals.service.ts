@@ -1,9 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AppealRecord, db, nextId, saveDb } from '../../common/utils/in-memory-db';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AppealsService {
-  findAll(): AppealRecord[] {
+  remove(id: number, userId: number): { id: number } {
+    const index = db.appeals.findIndex((item) => item.id === id && item.userId === userId && item.status === 'pending');
+    if (index === -1) throw new NotFoundException('No removable record found');
+    db.appeals.splice(index, 1);
+    saveDb();
+    return { id };
+  }
+
+  findAll(userId?: number): AppealRecord[] {
+    if (userId) {
+      return db.appeals.filter((appeal) => appeal.userId === userId);
+    }
     return db.appeals;
   }
 
@@ -29,6 +41,24 @@ export class AppealsService {
     if (!appeal) throw new NotFoundException(`Appeal with id ${id} not found`);
     appeal.evidence.push(payload.url || payload.fileName || 'evidence-file');
     saveDb();
+    return appeal;
+  }
+
+  updateStatus(id: number, status: AppealRecord['status']): AppealRecord {
+    const appeal = db.appeals.find((item) => item.id === id);
+    if (!appeal) throw new NotFoundException(`Appeal with id ${id} not found`);
+    appeal.status = status;
+    saveDb();
+
+    if (appeal.userId && (status === 'approved' || status === 'rejected')) {
+      NotificationsService.push({
+        userId: appeal.userId,
+        type: 'system',
+        text: `Your appeal (#${appeal.id}) was ${status}`,
+        targetId: appeal.id,
+      });
+    }
+
     return appeal;
   }
 }

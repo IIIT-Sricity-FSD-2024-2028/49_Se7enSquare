@@ -1,8 +1,12 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { AppealsService } from './appeals.service';
+import { AddAppealEvidenceDto } from './dto/add-appeal-evidence.dto';
+import { CreateAppealDto } from './dto/create-appeal.dto';
+import { UpdateAppealStatusDto } from './dto/update-appeal-status.dto';
 
 @ApiTags('appeals')
 @Controller('appeals')
@@ -10,20 +14,51 @@ export class AppealsController {
   constructor(private readonly service: AppealsService) {}
 
   @Get()
-  @Roles(AppRole.ADMIN, AppRole.MODERATOR)
-  findAll() {
-    return this.service.findAll();
+  @Roles(AppRole.ADMIN, AppRole.MODERATOR, AppRole.COMMUNITY_MANAGER, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  findAll(@Query('userId') userId?: string) {
+    const parsedUserId = userId ? parseInt(userId, 10) : undefined;
+    return this.service.findAll(parsedUserId);
   }
 
   @Post()
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
-  create(@Body() payload: any) {
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
+  create(@Body() payload: CreateAppealDto) {
     return this.service.create(payload);
   }
 
   @Post(':id/evidence')
-  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER)
-  addEvidence(@Param('id', ParseIntPipe) id: number, @Body() payload: any) {
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
+  addEvidence(@Param('id', ParseIntPipe) id: number, @Body() payload: AddAppealEvidenceDto) {
     return this.service.addEvidence(id, payload);
+  }
+
+  @Delete(':id')
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.service.remove(id, userId);
+  }
+
+  @Patch(':id/status')
+  @Roles(AppRole.ADMIN, AppRole.MODERATOR)
+  updateStatus(@Param('id', ParseIntPipe) id: number, @Body() payload: UpdateAppealStatusDto) {
+    return this.service.updateStatus(id, payload.status);
+  }
+
+  @Post(':id/approved')
+  @Roles(AppRole.ADMIN, AppRole.MODERATOR)
+  approveAppealPost(@Param('id', ParseIntPipe) id: number) {
+    return this.service.updateStatus(id, 'approved');
+  }
+
+  @Post(':id/rejected')
+  @Roles(AppRole.ADMIN, AppRole.MODERATOR)
+  rejectAppealPost(@Param('id', ParseIntPipe) id: number) {
+    return this.service.updateStatus(id, 'rejected');
+  }
+
+  @Post(':id/:status')
+  @Roles(AppRole.ADMIN, AppRole.MODERATOR)
+  reviewAppealPost(@Param('id', ParseIntPipe) id: number, @Param('status') status: any) {
+    return this.service.updateStatus(id, status);
   }
 }
