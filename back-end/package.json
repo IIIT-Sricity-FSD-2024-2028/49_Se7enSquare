@@ -2,6 +2,9 @@
   "name": "se7ensquare-backend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "description": "NestJS in-memory backend for Se7enSquare frontend integration",
   "scripts": {
     "build": "nest build",
@@ -10,7 +13,9 @@
     "start:prod": "node dist/main",
     "generate:swagger": "ts-node src/generate-swagger.ts",
     "seed": "ts-node src/seed.ts",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "test:integration": "npm run build && node test/profile.integration.cjs",
+    "test:e2e": "npm run build && npm --prefix ../front-end/react-app run build && node test/admin.e2e.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.8",
@@ -39,6 +44,7 @@
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "playwright": "^1.65.1",
     "prettier": "^3.3.3",
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",

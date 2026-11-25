@@ -12,6 +12,7 @@ const { NestFactory } = require('@nestjs/core');
 const { ValidationPipe } = require('@nestjs/common');
 const { AppModule } = require(path.join(root, 'dist/app.module'));
 const { db, hashPassword, saveDb } = require(path.join(root, 'dist/common/utils/in-memory-db'));
+const { createAuthSession } = require(path.join(root, 'dist/common/utils/auth-sessions'));
 const { FileLoggerService } = require(path.join(root, 'dist/common/logger/file-logger.service'));
 
 async function run() {
@@ -21,10 +22,13 @@ async function run() {
     authProvider: i === 7 ? 'google' : 'local', ...(i === 7 ? { googleId: 'test-google-id' } : { passwordHash: hashPassword('Testpass123') }) }));
   db.users.push(...users);
   db.communities.push({ id: 9000, name: 'Profile tests', description: 'Profile privacy tests', tags: ['test'], ownerId: 9000, visibility: 'public' });
+  db.communities.push({ id: 9002, name: 'Membership tests', description: 'Membership identity tests', tags: ['test'], ownerId: 9000, visibility: 'public' });
   db.memberships.push(...[9000, 9001].map((userId, i) => ({ id: 9000 + i, userId, communityId: 9000, joinedAt: new Date().toISOString() })));
+  db.messages.push({ id: 9000, channelId: 'general', communityId: 9000, authorId: 9000, authorName: 'Profile0', content: 'Message identity fixture', attachments: [], reactions: {}, pinned: false, createdAt: new Date().toISOString() });
   db.posts.push({ id: 9000, title: 'Profile activity', content: 'Test post', authorId: 9000, communityId: 9000 });
   db.reports.push({ id: 9000, reporterId: 9001, targetType: 'user', targetId: 9000, reason: 'Test report', status: 'pending' });
   saveDb();
+  const authTokens = users.map(user => createAuthSession(user.id));
   const app = await NestFactory.create(AppModule, { logger: false });
   const logger = app.get(FileLoggerService);
   logger.log = logger.error = logger.warn = () => {};
@@ -35,18 +39,38 @@ async function run() {
     const express = require('express');
     const dist = path.resolve(root, '../front-end/react-app/dist');
     app.use(express.static(dist));
-    for (const route of ['/login', '/profile-settings', '/profile-settings.html', '/owner-dashboard', '/dashboard']) {
-      app.use(route, (req, res) => res.sendFile(path.join(dist, 'index.html')));
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && req.path === '/') return res.sendFile(path.join(dist, 'index.html'));
+      return next();
+    });
+    const spaRoutes = [
+      '/landing', '/login', '/terms', '/privacy', '/pricing', '/dashboard', '/chat', '/discovery',
+      '/events', '/event-approval', '/event-registrants', '/create-community', '/community-page',
+      '/community-settings', '/report', '/appeal', '/mod-panel', '/admin-dashboard', '/owner-dashboard',
+      '/organizer-dashboard', '/profile-settings', '/user',
+    ];
+    for (const route of spaRoutes) {
+      app.use(route, (req, res, next) => {
+        if (req.method === 'GET' && req.originalUrl.split('?')[0] === route) return res.sendFile(path.join(dist, 'index.html'));
+        return next();
+      });
     }
   }
   await app.listen(serve ? 3100 : 0, '127.0.0.1');
   const base = await app.getUrl();
   let checks = 0;
-  async function request(endpoint, viewer = 0, method = 'GET', body, expected = 200) {
-    const headers = viewer === null ? {} : { 'x-user-id': String(users[viewer].id), 'x-role': users[viewer].role };
+  let lastSetCookie = null;
+  async function request(endpoint, viewer = 0, method = 'GET', body, expected = 200, extraHeaders = {}) {
+    const headers = viewer === null ? {} : {
+      Authorization: `Bearer ${authTokens[viewer]}`,
+      'x-user-id': String(users[viewer].id),
+      'x-role': users[viewer].role,
+    };
+    Object.assign(headers, extraHeaders);
     if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
     const response = await fetch(`${base}/api${endpoint}`, { method, headers,
       ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }) });
+    lastSetCookie = response.headers.get('set-cookie');
     const data = await response.json();
     assert.equal(response.status, expected, `${method} ${endpoint}: ${JSON.stringify(data)}`);
     checks++;
@@ -54,9 +78,39 @@ async function run() {
   }
   try {
     await request('/users/me', null, 'GET', undefined, 401);
+    await request('/auth/login', null, 'POST', { login: 'admin01', password: 'Demo@123' }, 401);
+    await request('/users/me', null, 'GET', undefined, 401, { 'x-user-id': String(users[3].id), 'x-role': 'admin' });
+    await request('/users/me', null, 'GET', undefined, 401, { Authorization: 'Bearer invalid-token' });
+    await request('/users/me', 0, 'GET', undefined, 403, { 'x-role': 'admin' });
     await request('/auth/change-password', null, 'POST', { new: 'Updated123', confirm: 'Updated123' }, 401);
+    const registered = await request('/auth/register', null, 'POST', {
+      username: 'new_profile_user', email: 'new_profile_user@test.invalid', password: 'Password123', role: 'admin',
+    }, 201);
+    assert.equal(registered.role, 'user');
+    assert(!('passwordHash' in registered));
+    await request('/auth/register', null, 'POST', {
+      username: 'new_profile_user', email: 'other@test.invalid', password: 'Password123',
+    }, 400);
     let me = await request('/users/me');
     assert.equal(me.hasPassword, true); assert(!('passwordHash' in me)); assert(!('allowDMs' in me.privacy));
+    const createdCommunity = await request('/communities', 0, 'POST', {
+      name: 'Owned by session', description: 'This community follows authenticated ownership.', tags: ['test'], ownerId: 9001,
+    }, 201);
+    assert.equal(createdCommunity.ownerId, 9000);
+    await request('/communities/9000', 1, 'PATCH', { description: 'Unauthorized edit attempt.' }, 403);
+    await request('/communities/9000', 1, 'DELETE', undefined, 403);
+    await request('/memberships?userId=9001', 0, 'GET', undefined, 403);
+    const membership = await request('/memberships', 0, 'POST', { userId: 9001, communityId: 9002 }, 201);
+    assert.equal(membership.userId, 9000);
+    await request(`/memberships/${membership.id}`, 1, 'DELETE', undefined, 403);
+    const createdMessage = await request('/messages', 1, 'POST', {
+      channelId: 'general', communityId: 9000, authorId: 9000, authorName: 'Impersonated admin', content: 'Identity is server controlled.',
+    }, 201);
+    assert.equal(createdMessage.authorId, 9001); assert.equal(createdMessage.authorName, 'Profile1 Test');
+    const reactedMessage = await request('/messages/9000/reactions', 1, 'POST', { emoji: '🔥', actorId: 9000, actorName: 'Impersonated admin' }, 201);
+    assert(reactedMessage.reactions['🔥'].includes(9001)); assert(!reactedMessage.reactions['🔥'].includes(9000));
+    await request('/messages/9000/pin', 1, 'PATCH', undefined, 403);
+    await request('/messages/9000/attachments', 1, 'POST', { fileName: 'spoofed.txt' }, 403);
     for (const bio of ['bad', 'x'.repeat(161), '']) await request('/users/me', 0, 'PATCH', { bio }, 400);
     await request('/users/me', 0, 'PATCH', { username: null }, 400);
     await request('/users/me', 0, 'PATCH', { privacy: { searchEngine: true } }, 400);
@@ -114,11 +168,19 @@ async function run() {
       { current: 'Testpass123', new: 'Updated123', confirm: 'mismatch1' },
       { current: 'Testpass123', new: 'Testpass123', confirm: 'Testpass123' },
     ]) await request('/auth/change-password', 0, 'POST', body, 400);
-    await request('/auth/change-password', 0, 'POST', { current: 'Testpass123', new: 'Updated123', confirm: 'Updated123' }, 201);
+    const changedPassword = await request('/auth/change-password', 0, 'POST', { current: 'Testpass123', new: 'Updated123', confirm: 'Updated123' }, 201);
+    assert(!('accessToken' in changedPassword));
+    authTokens[0] = createAuthSession(users[0].id);
     await request('/auth/login', null, 'POST', { login: 'profile_0', password: 'Testpass123' }, 401);
-    await request('/auth/login', null, 'POST', { login: 'profile_0', password: 'Updated123' }, 201);
+    const authenticated = await request('/auth/login', null, 'POST', { login: 'profile_0', password: 'Updated123' }, 201);
+    assert(!('accessToken' in authenticated));
+    const loginCookie = lastSetCookie?.split(';')[0];
+    assert.match(loginCookie || '', /^se7en_session=/);
+    await request('/users/me', null, 'GET', undefined, 200, { Cookie: loginCookie });
     assert.equal((await request('/users/me', 7)).hasPassword, false);
-    await request('/auth/change-password', 7, 'POST', { new: 'Google123', confirm: 'Google123' }, 201);
+    const googlePassword = await request('/auth/change-password', 7, 'POST', { new: 'Google123', confirm: 'Google123' }, 201);
+    assert(!('accessToken' in googlePassword));
+    authTokens[7] = createAuthSession(users[7].id);
     assert.equal((await request('/users/me', 7)).hasPassword, true);
     const application = { experienceNote: 'Organised several local gaming events.', games: 'Chess', organisations: 'Campus club', pastEventLinks: ['https://example.com/event'], expectedTournamentSize: 32, rulesAgreement: true, userId: 9001 };
     for (const viewer of [2, 3, 4, 5, 6]) await request('/organisers/apply', viewer, 'POST', application, 403);
@@ -150,6 +212,8 @@ async function run() {
     assert.equal((await request('/moderator-certification/status', 1)).status, 'certified');
     const stored = JSON.parse(fs.readFileSync(path.join(temp, 'db.json'))).db.users.find(u => u.id === 9000);
     assert.equal(stored.privacy.appearInSearch, true); assert.equal(stored.firstName, 'Updated');
+    await request('/auth/logout', 0, 'POST');
+    await request('/users/me', 0, 'GET', undefined, 401);
     console.log(`Profile integration: ${checks} HTTP checks passed (users, moderator, admin, owner, organizer, community manager, Google-only).`);
     if (serve) { console.log(`UI test server: ${base}; owner login profile_4 / Testpass123`); return; }
   } finally {
