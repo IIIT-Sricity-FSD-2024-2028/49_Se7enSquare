@@ -291,20 +291,22 @@ export default function Login() {
                 {loginLoading && <span className="btn-spinner"></span>}
               </Button>
 
-              {/* Quick Persona Access */}
-              <div className="demo-personas">
-                <span className="demo-label">Quick access:</span>
-                {personas.map((p) => (
-                  <button
-                    key={p.username}
-                    type="button"
-                    className="demo-pill"
-                    onClick={() => handleQuickLogin(p)}
-                  >
-                    {p.icon} {p.name}
-                  </button>
-                ))}
-              </div>
+              {/* Demo accounts are development-only and never offered in production. */}
+              {import.meta.env.DEV && (
+                <div className="demo-personas">
+                  <span className="demo-label">Quick access:</span>
+                  {personas.map((p) => (
+                    <button
+                      key={p.username}
+                      type="button"
+                      className="demo-pill"
+                      onClick={() => handleQuickLogin(p)}
+                    >
+                      {p.icon} {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="auth-divider">
                 <span>or continue with</span>

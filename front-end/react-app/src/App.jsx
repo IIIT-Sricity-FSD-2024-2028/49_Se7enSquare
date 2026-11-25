@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { selectCurrentUser } from './store/slices/authSlice';
+import { restoreSession, selectCurrentUser } from './store/slices/authSlice';
+import { useAppDispatch } from './store/hooks';
 
 // Pages
 import Index from './Pages/Index';
@@ -34,6 +35,11 @@ import GlobalToast from './Components/platform/common/GlobalToast';
 // Reads the user from the Redux store, so logging in or out re-renders it.
 function ProtectedRoute({ children, allowedRoles, allowOwner = false }) {
   const user = useSelector(selectCurrentUser);
+  const { sessionChecked, sessionLoading } = useSelector((state) => state.auth);
+
+  if (!sessionChecked || sessionLoading) {
+    return <div className="auth-session-loading" role="status">Checking your session…</div>;
+  }
 
   if (!user || !user.username || user.id === undefined || user.id === null) {
     return <Navigate to="/login" replace />;
@@ -59,10 +65,19 @@ function ProtectedRoute({ children, allowedRoles, allowOwner = false }) {
   return children;
 }
 
+function AuthBootstrap() {
+  const dispatch = useAppDispatch();
+  useEffect(() => {
+    dispatch(restoreSession());
+  }, [dispatch]);
+  return null;
+}
+
 
 export default function App() {
   return (
     <>
+    <AuthBootstrap />
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<Index />} />

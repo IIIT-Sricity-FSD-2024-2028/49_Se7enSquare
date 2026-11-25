@@ -50,16 +50,14 @@ export class CommunitiesService {
     };
   }
 
-  create(payload: CreateCommunityDto): CommunityRecord {
-    // Resolve ownerId — fall back to first user if not found so community is always created
-    const resolvedOwnerId = payload.ownerId && db.users.find((u) => u.id === payload.ownerId)
-      ? payload.ownerId
-      : (db.users[0]?.id ?? 1);
+  create(payload: CreateCommunityDto, creatorId: number): CommunityRecord {
+    const creator = db.users.find((user) => user.id === creatorId);
+    if (!creator) throw new ForbiddenException('A valid signed-in account is required');
 
     const created: CommunityRecord = {
       id: nextId('community'),
       ...payload,
-      ownerId: resolvedOwnerId,
+      ownerId: creatorId,
     };
 
     db.communities.push(created);
@@ -70,7 +68,7 @@ export class CommunitiesService {
     // The migration skips it on restart because it already exists.
     db.memberships.push({
       id: nextId('membership'),
-      userId: resolvedOwnerId,
+      userId: creatorId,
       communityId: created.id,
       role: 'owner',
       joinedAt: new Date().toISOString(),
@@ -80,10 +78,13 @@ export class CommunitiesService {
     return created;
   }
 
-  update(id: number, payload: UpdateCommunityDto): CommunityRecord {
+  update(id: number, payload: UpdateCommunityDto, actorId: number, actorRole: string): CommunityRecord {
     const rawCommunity = db.communities.find((item) => item.id === id);
     if (!rawCommunity) {
       throw new NotFoundException(`Community with id ${id} not found`);
+    }
+    if (actorRole !== 'admin' && rawCommunity.ownerId !== actorId) {
+      throw new ForbiddenException('Only the community owner or an administrator can update this community');
     }
 
     if (payload.ownerId) {
@@ -108,8 +109,12 @@ export class CommunitiesService {
     return this.findOne(id);
   }
 
-  remove(id: number): { message: string } {
-    this.findOne(id);
+  remove(id: number, actorId: number, actorRole: string): { message: string } {
+    const community = db.communities.find((item) => item.id === id);
+    if (!community) throw new NotFoundException(`Community with id ${id} not found`);
+    if (actorRole !== 'admin' && community.ownerId !== actorId) {
+      throw new ForbiddenException('Only the community owner or an administrator can delete this community');
+    }
     db.communities = db.communities.filter((item) => item.id !== id);
     db.memberships = db.memberships.filter((item) => item.communityId !== id);
     db.events = db.events.filter((item) => item.communityId !== id);

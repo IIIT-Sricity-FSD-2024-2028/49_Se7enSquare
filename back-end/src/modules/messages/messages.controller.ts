@@ -29,14 +29,14 @@ export class MessagesController {
 
   @Post('messages')
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
-  create(@Body() payload: CreateMessageDto) {
-    return this.service.create(payload);
+  create(@Body() payload: CreateMessageDto, @CurrentUser('id') userId: number) {
+    return this.service.create(payload, userId);
   }
 
   @Post('messages/:id/reactions')
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
-  react(@Param('id', ParseIntPipe) id: number, @Body() payload: ReactMessageDto) {
-    return this.service.react(id, payload.emoji || '👍', payload.actorId, payload.actorName);
+  react(@Param('id', ParseIntPipe) id: number, @Body() payload: ReactMessageDto, @CurrentUser('id') userId: number) {
+    return this.service.react(id, payload.emoji || '👍', userId);
   }
 
   @Delete('messages/:id')
@@ -47,13 +47,13 @@ export class MessagesController {
 
   @Patch('messages/:id/pin')
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
-  pin(@Param('id', ParseIntPipe) id: number) {
-    return this.service.pin(id);
+  pin(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number, @CurrentUser('role') role: string) {
+    return this.service.pin(id, userId, role);
   }
 
   @Post('messages/:id/attachments')
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
-  addAttachment(@Param('id', ParseIntPipe) id: number, @Body() payload: AddMessageAttachmentDto) {
-    return this.service.addAttachment(id, payload.fileName || payload.url || 'attachment');
+  addAttachment(@Param('id', ParseIntPipe) id: number, @Body() payload: AddMessageAttachmentDto, @CurrentUser('id') userId: number, @CurrentUser('role') role: string) {
+    return this.service.addAttachment(id, payload.fileName || payload.url || 'attachment', userId, role);
   }
 }

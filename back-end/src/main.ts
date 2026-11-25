@@ -58,11 +58,25 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  const allowedCorsOrigins = new Set(
+    (process.env.CORS_ORIGINS || '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  );
+  if (process.env.NODE_ENV !== 'production') {
+    allowedCorsOrigins.add('http://localhost:5173');
+    allowedCorsOrigins.add('http://127.0.0.1:5173');
+  }
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedCorsOrigins.has(origin)) callback(null, true);
+      else callback(null, false);
+    },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-role', 'x-user-id', 'Authorization'],
-    credentials: false,
+    credentials: true,
   });
 
   const config = new DocumentBuilder()

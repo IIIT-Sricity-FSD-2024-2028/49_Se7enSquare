@@ -20,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { CommunitiesService } from './communities.service';
 import { CommunityDto } from './dto/community.dto';
@@ -74,8 +75,8 @@ export class CommunitiesController {
   @ApiBody({ type: CreateCommunityDto, description: 'Community creation payload (name, description, ownerId, tags)' })
   @ApiCreatedResponse({ type: CommunityDto, description: 'The newly created community' })
   @ApiForbiddenResponse({ description: 'Missing or invalid x-role header' })
-  create(@Body() payload: CreateCommunityDto) {
-    return this.communitiesService.create(payload);
+  create(@Body() payload: CreateCommunityDto, @CurrentUser('id') userId: number) {
+    return this.communitiesService.create(payload, userId);
   }
 
   @Patch(':id')
@@ -92,24 +93,23 @@ export class CommunitiesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateCommunityDto,
+    @CurrentUser('id') userId: number,
+    @CurrentUser('role') role: string,
   ) {
-    return this.communitiesService.update(id, payload);
+    return this.communitiesService.update(id, payload, userId, role);
   }
 
   @Delete(':id')
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.USER, AppRole.ORGANIZER)
   @ApiOperation({
     summary: 'Delete a community',
-    description:
-      'Permanently deletes a community and cascades to related memberships and events. Same trust model as ' +
-      'create/update — any authenticated role may call this; the frontend is responsible for only showing the ' +
-      'Delete action to the community owner or an admin, since there is no per-request user identity to enforce it server-side.',
+    description: 'Permanently deletes a community and related records. Only its owner or an administrator may delete it.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Numeric community ID to delete' })
   @ApiOkResponse({ schema: { example: { message: 'Community 3 deleted' } }, description: 'Deletion confirmation' })
   @ApiNotFoundResponse({ description: 'Community not found' })
   @ApiForbiddenResponse({ description: 'Missing or invalid x-role header' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.communitiesService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number, @CurrentUser('role') role: string) {
+    return this.communitiesService.remove(id, userId, role);
   }
 }

@@ -75,8 +75,8 @@ The matrix in `front-end/react-app/src/services/roleAccess.js` governs access to
 Server-side identity verification is enforced by `AuthContextGuard` registered globally in `back-end/src/app.module.ts`:
 
 1. **Identity Extraction**:
-   - Reads `x-user-id` header from incoming HTTP requests.
-   - For non-public endpoints, returns `401 Unauthorized` if `x-user-id` is missing or does not match an existing database user.
+   - Validates the server-issued session from the `HttpOnly` `se7en_session` cookie (or a bearer token for non-browser clients), then loads the account from the database.
+   - For non-public endpoints, returns `401 Unauthorized` for a missing, expired, or revoked session. `x-user-id` is only an optional consistency hint and cannot authenticate or select another user.
 2. **Server-Side Role Derivation & Verification**:
    - Fetches the user record directly from the database.
    - If the client sends an `x-role` header that conflicts with the user's persisted database role, returns `403 Forbidden` (`Role header mismatch`).
@@ -99,7 +99,8 @@ Server-side identity verification is enforced by `AuthContextGuard` registered g
 
 1. **Password Hashing**:
    - Passwords are securely hashed using `node:crypto`'s `scryptSync` with salt: `salt:derivedKeyHex`.
-   - Migrations automatically upgrade legacy plain passwords to scrypt hashes. Default seed password is `Demo@123`.
+   - Development seed accounts use `Demo@123`; production startup strips that public demo credential, including from existing JSON data files.
+   - Successful login issues a short-lived, random session held server-side and delivered in an `HttpOnly`, `SameSite=Strict` cookie. The API does not treat `x-user-id` as proof of identity. Logout revokes the session; password changes revoke earlier sessions.
 2. **Zero Password Leakage**:
    - `sanitizeUser()` strips both `password` and `passwordHash` before any user record is returned over HTTP.
    - Applies to: `POST /auth/login`, `POST /auth/register`, `POST /auth/google`, `GET /users/me`, `PATCH /users/me`, `GET /users`, `GET /users/:id`, and `POST /users`.
@@ -112,7 +113,7 @@ Server-side identity verification is enforced by `AuthContextGuard` registered g
 ## 6. Frontend Session & Error Handling
 
 1. **Session Storage Hygiene**:
-   - `localStorage.getItem('user')` contains strictly sanitized session data: `{ id, username, role, name }`. Never contains passwords, hashes, or tokens.
+   - Authentication is carried in an `HttpOnly` session cookie and is not copied into localStorage or browser-readable Redux state. Redux restores the sanitized user profile from `GET /users/me` after a page refresh.
 2. **Restricted Account Handling**:
    - `services/api.js` and the temporary fetch shim in `main.jsx` detect `ACCOUNT_BANNED` and `ACCOUNT_SUSPENDED` response codes.
    - On error, active session credentials are cleared and the user is redirected to `/login?accountStatus=...&statusReason=...`. Suspended accounts are presented with a direct button to file an appeal via `/appeal`.

@@ -10,6 +10,8 @@
     "build:all": "npm --prefix back-end run build && npm --prefix front-end/react-app run build",
     "lint": "npm --prefix back-end run lint && npm --prefix front-end/react-app run lint",
     "test": "npm --prefix back-end run lint && npm --prefix front-end/react-app run lint && npm --prefix back-end run build && npm --prefix front-end/react-app run build",
+    "test:integration": "npm --prefix back-end run test:integration",
+    "test:e2e": "npm --prefix back-end run test:e2e",
     "preview": "npm --prefix front-end/react-app run preview",
     "backend": "npm --prefix back-end run start:dev"
   }

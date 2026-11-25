@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ChatMessageRecord, db, nextId, saveDb } from '../../common/utils/in-memory-db';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -23,13 +23,15 @@ export class MessagesService {
     return db.messages.filter((item) => item.channelId === channelId);
   }
 
-  create(payload: Partial<ChatMessageRecord>): ChatMessageRecord {
+  create(payload: Partial<ChatMessageRecord>, authorId: number): ChatMessageRecord {
+    const author = db.users.find((user) => user.id === authorId);
+    if (!author) throw new NotFoundException('Authenticated message author was not found');
     const created: ChatMessageRecord = {
       id: nextId('message'),
       channelId: payload.channelId || 'general',
       communityId: payload.communityId,
-      authorId: payload.authorId,
-      authorName: payload.authorName || 'User',
+      authorId,
+      authorName: author.fullName || [author.firstName, author.lastName].filter(Boolean).join(' ') || author.username,
       content: payload.content || '',
       attachments: payload.attachments || [],
       reactions: {},
@@ -41,8 +43,9 @@ export class MessagesService {
     return created;
   }
 
-  react(id: number, emoji: string, actorId?: number, actorName?: string): ChatMessageRecord {
+  react(id: number, emoji: string, actorId: number): ChatMessageRecord {
     const message = this.findOne(id);
+    const actor = db.users.find((user) => user.id === actorId);
     if (!message.reactions) {
       message.reactions = {};
     }
@@ -60,7 +63,7 @@ export class MessagesService {
       NotificationsService.push({
         userId: message.authorId,
         type: 'reaction',
-        text: `${actorName || 'Someone'} reacted ${emoji} to your message`,
+        text: `${actor?.username || 'Someone'} reacted ${emoji} to your message`,
         channelId: message.channelId,
         targetId: message.id,
       });
@@ -70,15 +73,21 @@ export class MessagesService {
   }
 
 
-  pin(id: number): ChatMessageRecord {
+  pin(id: number, actorId: number, actorRole: string): ChatMessageRecord {
     const message = this.findOne(id);
+    if (message.authorId !== actorId && !['admin', 'community_manager', 'moderator'].includes(actorRole)) {
+      throw new ForbiddenException('Only the message author or a moderator can pin this message');
+    }
     message.pinned = !message.pinned;
     saveDb();
     return message;
   }
 
-  addAttachment(id: number, fileName: string): ChatMessageRecord {
+  addAttachment(id: number, fileName: string, actorId: number, actorRole: string): ChatMessageRecord {
     const message = this.findOne(id);
+    if (message.authorId !== actorId && !['admin', 'community_manager', 'moderator'].includes(actorRole)) {
+      throw new ForbiddenException('Only the message author or a moderator can add attachments');
+    }
     message.attachments.push(fileName);
     saveDb();
     return message;

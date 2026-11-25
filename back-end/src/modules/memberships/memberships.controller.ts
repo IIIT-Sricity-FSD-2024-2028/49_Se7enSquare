@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -19,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { CreateMembershipDto } from './dto/create-membership.dto';
 import { MembershipsService } from './memberships.service';
@@ -42,7 +44,12 @@ export class MembershipsController {
   findAll(
     @Query('communityId') communityId?: string,
     @Query('userId') userId?: string,
+    @CurrentUser('id') actorId?: number,
+    @CurrentUser('role') actorRole?: string,
   ) {
+    if (actorRole !== 'admin' && !communityId && (!userId || Number(userId) !== actorId)) {
+      throw new ForbiddenException('You may only view your own memberships');
+    }
     if (communityId) return this.membershipsService.findByCommunity(Number(communityId));
     if (userId) return this.membershipsService.findByUser(Number(userId));
     return this.membershipsService.findAll();
@@ -53,8 +60,8 @@ export class MembershipsController {
   @ApiOperation({ summary: 'Join a community (create membership)' })
   @ApiBody({ type: CreateMembershipDto })
   @ApiCreatedResponse({ schema: { example: { id: 5, userId: 3, communityId: 1, joinedAt: '2026-05-02T12:00:00.000Z' } } })
-  create(@Body() payload: CreateMembershipDto) {
-    return this.membershipsService.create(payload);
+  create(@Body() payload: CreateMembershipDto, @CurrentUser('id') userId: number) {
+    return this.membershipsService.create(payload, userId);
   }
 
   @Delete(':id')
@@ -62,7 +69,7 @@ export class MembershipsController {
   @ApiOperation({ summary: 'Leave a community (delete membership by id)' })
   @ApiParam({ name: 'id', type: Number })
   @ApiOkResponse({ schema: { example: { message: 'Membership 5 removed' } } })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.membershipsService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number, @CurrentUser('role') role: string) {
+    return this.membershipsService.remove(id, userId, role);
   }
 }

@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { db } from '../utils/in-memory-db';
+import { getAuthSession, readSessionCookie } from '../utils/auth-sessions';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
@@ -30,35 +31,52 @@ export class AuthContextGuard implements CanActivate {
       cleanUrl.startsWith('/api/docs') ||
       cleanUrl.startsWith('/uploads');
 
-    const rawUserId = request.headers['x-user-id'];
-    const userIdHeader = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+    const rawAuthorization = request.headers.authorization;
+    const authorization = Array.isArray(rawAuthorization) ? rawAuthorization[0] : rawAuthorization;
+    const bearerToken = typeof authorization === 'string' && /^Bearer\s+/i.test(authorization)
+      ? authorization.replace(/^Bearer\s+/i, '').trim()
+      : null;
+    const sessionToken = bearerToken || readSessionCookie(request.headers.cookie);
 
     if (isPublic || isAuthOrDoc) {
-      if (userIdHeader) {
-        const parsedId = Number(userIdHeader);
-        if (!isNaN(parsedId)) {
-          const user = db.users.find((u) => u.id === parsedId);
-          if (user) {
-            (request as any).user = user;
-            (request as any).userRole = user.role;
+      if (authorization && !bearerToken) {
+        throw new UnauthorizedException('Invalid bearer authorization header');
+      }
+      if (sessionToken) {
+        const userId = getAuthSession(sessionToken);
+        const user = userId === null ? undefined : db.users.find((u) => u.id === userId);
+        if (!user) {
+          if (bearerToken || (!isPublic && !isAuthOrDoc)) {
+            throw new UnauthorizedException('Invalid or expired session');
           }
+        } else {
+          (request as any).user = user;
+          (request as any).userRole = user.role;
         }
       }
       return true;
     }
 
-    if (!userIdHeader) {
-      throw new UnauthorizedException('Missing or invalid x-user-id header');
+    if (!sessionToken) {
+      throw new UnauthorizedException('Missing or invalid session');
     }
 
-    const userId = Number(userIdHeader);
-    if (isNaN(userId)) {
-      throw new UnauthorizedException('Invalid numeric x-user-id header');
+    const userId = getAuthSession(sessionToken);
+    if (userId === null) {
+      throw new UnauthorizedException('Invalid or expired session');
     }
 
     const user = db.users.find((u) => u.id === userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    // x-user-id remains as a compatibility hint for clients and logs, but it
+    // can never establish identity or select a different account.
+    const rawUserId = request.headers['x-user-id'];
+    const userIdHeader = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+    if (userIdHeader !== undefined && Number(userIdHeader) !== user.id) {
+      throw new ForbiddenException('User ID header does not match authenticated session');
     }
 
     // Role verification against database record
