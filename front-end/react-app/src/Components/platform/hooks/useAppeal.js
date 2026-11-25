@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { selectActiveSanctionSummary } from '../../../store/selectors/profileSelectors';
 import { APPEAL_TYPES } from '../data/appealData';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import { fetchMyProfile, selectProfile } from '../../../store/slices/profileSlice';
@@ -8,6 +9,8 @@ import {
   fetchActiveSanction,
   fetchMyAppeals,
   submitAppeal,
+  appealFormChanged,
+  resetAppealForm,
   selectAppealState,
 } from '../../../store/slices/appealSlice';
 
@@ -19,11 +22,11 @@ import {
  */
 export default function useAppeal() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
-  const sessionUser = useSelector(selectCurrentUser);
-  const profile = useSelector(selectProfile);
-  const { sanction, myAppeals, loadingAppeals, submitting } = useSelector(selectAppealState);
+  const sessionUser = useAppSelector(selectCurrentUser);
+  const profile = useAppSelector(selectProfile);
+  const { form, myAppeals, loadingAppeals, submitting } = useAppSelector(selectAppealState);
 
   // Session data first, replaced by the fresh profile (status & reason) once loaded
   const source = profile || sessionUser;
@@ -37,24 +40,26 @@ export default function useAppeal() {
   };
 
   // Restriction from the login redirect, if any
-  const [urlAction] = useState(() => {
+  const { sanction } = useAppSelector(selectActiveSanctionSummary);
+  const urlAction = useMemo(() => {
     const code = searchParams.get('accountStatus');
     if (!code) return null;
     return {
       type: code === 'ACCOUNT_BANNED' ? 'Account Ban' : 'Account Suspension',
       reason: searchParams.get('reason') || 'Violation of community guidelines',
       until: searchParams.get('until') || null,
-      id: `SAN-${Date.now()}`,
+      id: searchParams.get('actionId') || null,
     };
-  });
+  }, [searchParams]);
   const action = urlAction || sanction;
 
-  const [appealType, setAppealType] = useState('');
-  const [statement, setStatement] = useState('');
-  const [commitment, setCommitment] = useState('');
-  const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
-  const [refId, setRefId] = useState('');
+  const { appealType, statement, commitment, errors, submitted, refId } = form;
+  const setAppealType = (value) => dispatch(appealFormChanged({ appealType: value }));
+  const setStatement = (value) => dispatch(appealFormChanged({ statement: value }));
+  const setCommitment = (value) => dispatch(appealFormChanged({ commitment: value }));
+  const setErrors = (value) => dispatch(appealFormChanged({ errors: value }));
+
+  useEffect(() => () => dispatch(resetAppealForm()), [dispatch]);
 
   // Thunk conditions skip all three when nobody is logged in
   useEffect(() => {
@@ -97,23 +102,10 @@ export default function useAppeal() {
       evidence: [],
     };
 
-    // Show the success screen only with the real appeal ID from the backend
-    try {
-      const id = await dispatch(submitAppeal(payload)).unwrap();
-      setRefId(`APL-${id}`);
-      setSubmitted(true);
-    } catch (err) {
-      setErrors({ submit: `Appeal not sent: ${err.message}` });
-    }
+    return dispatch(submitAppeal(payload));
   };
 
-  const resetForm = () => {
-    setSubmitted(false);
-    setAppealType('');
-    setStatement('');
-    setCommitment('');
-    setErrors({});
-  };
+  const resetForm = () => dispatch(resetAppealForm());
 
   return {
     navigate,

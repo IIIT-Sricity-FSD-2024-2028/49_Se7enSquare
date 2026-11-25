@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { landingUiChanged, advanceLandingStep, toggleLandingCommunity, resetLandingUi } from '../../../store/slices/uiSlice';
 import { dashboardService } from '../../../services/dashboardService';
 
 export const HOW_IT_WORKS_STEPS = [
@@ -29,62 +31,48 @@ export const HOW_IT_WORKS_STEPS = [
  */
 export default function useLanding() {
   // ── 1. Statistics State from Backend ──
-  const [stats, setStats] = useState({
-    users: '0',
-    comms: '0',
-    msgs: '0',
-  });
+  const dispatch = useAppDispatch();
+  const { stats, activeStep, joinedCommunities, tiltStyle } = useAppSelector((state) => state.ui.landingUi);
+  const setActiveStep = (value) => dispatch(landingUiChanged({ activeStep: value }));
+  const setTiltStyle = (value) => dispatch(landingUiChanged({ tiltStyle: value }));
+
+  useEffect(() => () => dispatch(resetLandingUi()), [dispatch]);
 
   useEffect(() => {
+    let active = true;
     dashboardService
       .getLandingStats()
       .then((data) => {
-        if (data) {
+        if (active && data) {
           const u = data.totalUsers ?? 0;
           const c = data.totalCommunities ?? 0;
           const m = data.totalMessages ?? 0;
-          setStats({
+          dispatch(landingUiChanged({ stats: {
             users: u >= 1000 ? `${(u / 1000).toFixed(1)}K+` : String(u),
             comms: c >= 1000 ? `${(c / 1000).toFixed(1)}K+` : String(c),
             msgs: m >= 1000 ? `${(m / 1000).toFixed(1)}K+` : String(m),
-          });
+          } }));
         }
       })
       .catch((error) => {
         console.error('Failed to load landing page stats:', error);
       });
-  }, []);
+    return () => { active = false; };
+  }, [dispatch]);
 
   // ── 2. How It Works Step Switching & Auto-Cycling ──
-  const [activeStep, setActiveStep] = useState(0);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % HOW_IT_WORKS_STEPS.length);
+      dispatch(advanceLandingStep(HOW_IT_WORKS_STEPS.length));
     }, 3500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dispatch]);
 
   // ── 3. Interactive Joined States for Mockup Communities ──
-  const [joinedCommunities, setJoinedCommunities] = useState({
-    devNexus: true,
-    designStudio: false,
-    openSourceHub: false,
-    hackathonHQ: false,
-  });
-
-  const toggleJoin = (key) => {
-    setJoinedCommunities((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  // ── 4. 3D Tilt Effect on Hero Mockup ──
-  const [tiltStyle, setTiltStyle] = useState({
-    transform: 'rotateY(-6deg) rotateX(3deg)',
-  });
+  const toggleJoin = (key) => dispatch(toggleLandingCommunity(key));
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();

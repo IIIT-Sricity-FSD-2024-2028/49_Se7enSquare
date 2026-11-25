@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { chatUiChanged } from '../../../store/slices/chatSlice';
 
 /**
  * Message feed — renders scrollable message list with day divider,
@@ -13,9 +15,14 @@ export default function MessageFeed({
   onToggleReaction,
   onSetReplyTo,
   messagesEndRef,
+  onTogglePin,
+  onDelete,
+  user,
 }) {
   const navigate = useNavigate();
-  const [activeMenuId, setActiveMenuId] = useState(null);
+  const dispatch = useAppDispatch();
+  const activeMenuId = useAppSelector((state) => state.chat.activeMenuId);
+  const setActiveMenuId = (id) => dispatch(chatUiChanged({ activeMenuId: id }));
   const menuRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -23,12 +30,12 @@ export default function MessageFeed({
     if (!activeMenuId) return;
     function handleOutsideClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setActiveMenuId(null);
+        dispatch(chatUiChanged({ activeMenuId: null }));
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [activeMenuId]);
+  }, [activeMenuId, dispatch]);
 
   return (
     <div className="messages-wrap" id="messagesWrap">
@@ -102,7 +109,7 @@ export default function MessageFeed({
                 type="button"
                 className="act-btn"
                 title="More"
-                onClick={() => setActiveMenuId(id => id === msg.id ? null : msg.id)}
+                onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
               >
                 ⋯
               </button>
@@ -127,6 +134,22 @@ export default function MessageFeed({
                   gap: "4px",
                 }}
               >
+                {user.id && user.role !== 'owner' && (
+                  <button type="button" className="act-btn" onClick={() => {
+                    onTogglePin(msg.id);
+                    setActiveMenuId(null);
+                  }}>
+                    {msg.pinned ? 'Unpin Message' : 'Pin Message'}
+                  </button>
+                )}
+                {user.id && String(user.id) === String(msg.authorId) && (
+                  <button type="button" className="act-btn" onClick={() => {
+                    onDelete(msg.id);
+                    setActiveMenuId(null);
+                  }}>
+                    Delete Message
+                  </button>
+                )}
                 <button
                   type="button"
                   style={{

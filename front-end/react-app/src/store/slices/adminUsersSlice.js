@@ -72,7 +72,18 @@ export const reinstateUser = createAsyncThunk(
   }
 );
 
+export const createUser = createAsyncThunk(
+  'adminUsers/create',
+  (payload) => apiRequest('/users', { method: 'POST', body: JSON.stringify(payload) }),
+);
+
+export const deleteUser = createAsyncThunk('adminUsers/delete', async (id) => {
+  await apiRequest(`/users/${id}`, { method: 'DELETE' });
+  return id;
+});
+
 const initialState = {
+  loading: true,
   users: [],
   userSearch: '',
   userRoleFilter: 'all',
@@ -83,6 +94,11 @@ const adminUsersSlice = createSlice({
   name: 'adminUsers',
   initialState,
   reducers: {
+    resetUserFilters(state) {
+      state.userSearch = '';
+      state.userRoleFilter = 'all';
+      state.editingUser = null;
+    },
     userSearchChanged(state, action) {
       state.userSearch = action.payload;
     },
@@ -95,17 +111,30 @@ const adminUsersSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchUsers.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchUsers.rejected, (state) => {
+        state.loading = false;
+      })
       .addCase(fetchUsers.fulfilled, (state, action) => {
+        state.loading = false;
         state.users = action.payload;
       })
       .addCase(updateUserRole.fulfilled, (state) => {
         state.editingUser = null;
       })
+      .addCase(createUser.fulfilled, (state, action) => {
+        if (!state.users.some(({ id }) => id === action.payload.id)) state.users.push(action.payload);
+      })
+      .addCase(deleteUser.fulfilled, (state, action) => {
+        state.users = state.users.filter(({ id }) => id !== action.payload);
+      })
       .addCase(logout, () => initialState);
   },
 });
 
-export const { userSearchChanged, userRoleFilterChanged, editingUserChanged } = adminUsersSlice.actions;
+export const { userSearchChanged, userRoleFilterChanged, editingUserChanged, resetUserFilters } = adminUsersSlice.actions;
 
 export const selectAdminUsers = (state) => state.adminUsers.users;
 export const selectUserSearch = (state) => state.adminUsers.userSearch;

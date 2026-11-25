@@ -1,17 +1,19 @@
 import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { PLANS, PLAN_RANK } from '../data/pricingPlans';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
   fetchSubscriptionStatus,
   changePlan,
+  createSubscription,
+  resetPricingState,
   cancelSubscription,
   statusSkipped,
-  selectCurrentPlan,
   selectPricingLoading,
   selectPricingSubmitting,
 } from '../../../store/slices/pricingSlice';
+import { selectActiveSubscriptionPlan } from '../../../store/selectors/authDashboardSelectors';
 import useToast from './useToast';
 
 /**
@@ -21,11 +23,11 @@ import useToast from './useToast';
  */
 export default function usePricing() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const user = useSelector(selectCurrentUser);
-  const currentPlan = useSelector(selectCurrentPlan);
-  const isLoading = useSelector(selectPricingLoading);
-  const isSubmitting = useSelector(selectPricingSubmitting);
+  const dispatch = useAppDispatch();
+  const user = useAppSelector(selectCurrentUser);
+  const currentPlan = useAppSelector(selectActiveSubscriptionPlan).id;
+  const isLoading = useAppSelector(selectPricingLoading);
+  const isSubmitting = useAppSelector(selectPricingSubmitting);
   const { showToast } = useToast();
 
   const userId = user?.id;
@@ -46,6 +48,8 @@ export default function usePricing() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => () => dispatch(resetPricingState()), [dispatch]);
 
   const handlePlanChange = async (planId) => {
     if (!userId) {
@@ -77,7 +81,8 @@ export default function usePricing() {
     }
 
     try {
-      await dispatch(changePlan({ userId, plan: planId })).unwrap();
+      const savePlan = currentPlan === 'free' ? createSubscription : changePlan;
+      await dispatch(savePlan({ userId, plan: planId })).unwrap();
       showToast('✅', `Now on the ${targetPlan.name} plan`);
       await fetchStatus();
     } catch (err) {

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { selectCurrentUser, logout } from '../store/slices/authSlice';
-import { selectSidebarCollapsed, sidebarToggled } from '../store/slices/uiSlice';
+import { selectSidebarCollapsed, sidebarToggled, setSidebarMobileOpen } from '../store/slices/uiSlice';
 import { getHomeRoute } from '../services/roleAccess';
 import '../styles/sidebar.css';
 
@@ -102,17 +102,17 @@ function toSidebarUser(sessionUser) {
 export default function SideBar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
-  const collapsed = useSelector(selectSidebarCollapsed);
+  const dispatch = useAppDispatch();
+  const collapsed = useAppSelector(selectSidebarCollapsed);
   // Re-renders automatically when login, logout or a profile update changes the store
-  const sessionUser = useSelector(selectCurrentUser);
+  const sessionUser = useAppSelector(selectCurrentUser);
   const user = useMemo(() => toSidebarUser(sessionUser), [sessionUser]);
 
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileOpen = useAppSelector((state) => state.ui.sidebarMobileOpen);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname, location.search]);
+    dispatch(setSidebarMobileOpen(false));
+  }, [dispatch, location.pathname, location.search]);
 
   const toggleCollapse = () => dispatch(sidebarToggled());
 
@@ -135,7 +135,7 @@ export default function SideBar() {
       <button
         type="button"
         className="sb-mobile-open"
-        onClick={() => setMobileOpen((o) => !o)}
+        onClick={() => dispatch(setSidebarMobileOpen(!mobileOpen))}
         aria-label="Toggle navigation menu"
       >
         <span />
@@ -146,7 +146,7 @@ export default function SideBar() {
       {/* Mobile Backdrop */}
       <div
         className={`sb-backdrop${mobileOpen ? ' visible' : ''}`}
-        onClick={() => setMobileOpen(false)}
+        onClick={() => dispatch(setSidebarMobileOpen(false))}
       />
 
       <aside

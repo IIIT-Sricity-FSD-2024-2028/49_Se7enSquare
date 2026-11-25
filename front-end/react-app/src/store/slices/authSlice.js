@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getStoredUser, toSessionUser } from '../../services/api';
+import { toSessionUser } from '../../services/api';
 import { authService } from '../../services/authService';
 
 /**
@@ -60,14 +60,19 @@ export const registerUser = createAsyncThunk(
   }
 );
 
-/**
- * Auth slice: the logged-in user, shared by every page, plus centralized loading/error states.
- * Starts from localStorage so a page refresh keeps the session.
- * Writing back to localStorage is done by the listener middleware, not here,
- * because reducers must stay pure (no side effects).
- */
+const initialForm = {
+  currentTab: 'login', cardShake: false,
+  loginEmail: '', loginPassword: '', loginRole: '', rememberMe: false,
+  showLoginPassword: false, loginFieldErrors: {},
+  regFullName: '', regEmail: '', regHandle: '', regPassword: '', regConfirm: '',
+  regRole: 'user', regTerms: false, showRegPassword: false, showRegConfirm: false,
+  regFieldErrors: {}, forgotEmail: '', forgotError: '', forgotLoading: false,
+  googleLoading: false,
+};
+
 const initialState = {
-  user: getStoredUser(),
+  user: null,
+  form: initialForm,
   loginLoading: false,
   loginError: null,
   regLoading: false,
@@ -90,6 +95,12 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
+    authFormChanged(state, { payload }) {
+      Object.assign(state.form, payload);
+    },
+    resetAuthForm(state) {
+      state.form = initialForm;
+    },
     loginSuccess: setSessionUser,
     profileUpdated: setSessionUser,
     logout(state) {
@@ -147,6 +158,8 @@ const authSlice = createSlice({
 });
 
 export const {
+  authFormChanged,
+  resetAuthForm,
   loginSuccess,
   profileUpdated,
   logout,

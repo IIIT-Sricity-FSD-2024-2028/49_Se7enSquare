@@ -16,7 +16,7 @@ export default function ProfileSettings() {
   return <div className="app-shell"><SideBar /><div className="main-column-wrapper">
     <ProfileHeaderBar formData={p.formData} isDirty={p.isDirty} canDiscard={p.canDiscard} saving={p.saving || p.loading} initials={p.initials} onDiscard={p.discardChanges} onSave={p.saveAllChanges} onLogout={p.handleLogout} userRole={p.user?.role} />
     {p.loading ? <p role="status">Loading your profile…</p> : <div className="body-wrap">
-      {p.user && <ProfileNav formData={p.formData} initials={p.initials} activeTab={p.activeTab} onSelectTab={p.setActiveTab} userRole={p.user?.role} />}
+      {p.user && <ProfileNav completeness={p.profileCompleteness} formData={p.formData} initials={p.initials} activeTab={p.activeTab} onSelectTab={p.setActiveTab} userRole={p.user?.role} />}
       <div className="main">
         {p.user?.status && p.user.status !== 'active' && (
           <div
@@ -156,7 +156,17 @@ export default function ProfileSettings() {
               />
             )}
             {p.activeTab === 'membership' && <MembershipTab p={p} />}
-            {p.activeTab === 'danger' && <DangerZoneTab navigate={p.navigate} onShowToast={p.showToast} onLogout={p.handleLogout} />}
+            {p.activeTab === 'danger' && (
+              <DangerZoneTab
+                navigate={p.navigate}
+                onShowToast={p.showToast}
+                onLogout={p.handleLogout}
+                hasPassword={p.user.hasPassword}
+                deletePassword={p.deletePassword}
+                onDeletePasswordChange={p.setDeletePassword}
+                onDeleteAccount={p.handleDeleteAccount}
+              />
+            )}
           </fieldset>
         )}
       </div>

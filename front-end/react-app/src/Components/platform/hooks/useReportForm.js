@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { toastShown } from '../../../store/slices/uiSlice';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
   searchUsers,
   submitReport as submitReportThunk,
   reportStarted,
-  reportReset,
+  resetReportForm,
   stepChanged,
   targetSelected,
   reasonSelected,
@@ -22,9 +22,9 @@ import {
  * Returns the same values as before, so the step components are unchanged.
  */
 export default function useReportForm() {
-  const dispatch = useDispatch();
-  const sessionUser = useSelector(selectCurrentUser);
-  const report = useSelector(selectReport);
+  const dispatch = useAppDispatch();
+  const sessionUser = useAppSelector(selectCurrentUser);
+  const report = useAppSelector(selectReport);
   const [searchParams] = useSearchParams();
 
   const currentUser = {
@@ -40,17 +40,14 @@ export default function useReportForm() {
   const ctxMsgText = searchParams.get('text');
 
   useEffect(() => {
-    if (ctxUser) {
-      dispatch(reportStarted({ type: 'user', id: ctxUser, name: ctxUserName || `User #${ctxUser}` }));
-    } else if (ctxMsg) {
+    if (ctxMsg) {
       dispatch(reportStarted({ type: 'message', id: ctxMsg, text: ctxMsgText, author: ctxUserName || null }));
+    } else if (ctxUser) {
+      dispatch(reportStarted({ type: 'user', id: ctxUser, name: ctxUserName || `User #${ctxUser}` }));
     }
   }, [dispatch, ctxUser, ctxMsg, ctxUserName, ctxMsgText]);
 
-  // A finished report should not greet the user again next time they open the page
-  useEffect(() => () => {
-    if (report.submitted) dispatch(reportReset());
-  }, [dispatch, report.submitted]);
+  useEffect(() => () => dispatch(resetReportForm()), [dispatch]);
 
   const handleUserSearch = (val) => {
     dispatch(userSearchChanged(val));
@@ -97,7 +94,7 @@ export default function useReportForm() {
     submitting: report.submitting,
     handleUserSearch,
     submitReport,
-    resetForm: () => dispatch(reportReset()),
+    resetForm: () => dispatch(resetReportForm()),
     goStep,
   };
 }

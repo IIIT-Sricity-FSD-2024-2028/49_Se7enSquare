@@ -1,7 +1,7 @@
 import React from 'react';
 
 /** "Danger Zone" tab — appeal link, deactivate, and logout actions. */
-export default function DangerZoneTab({ navigate, onShowToast, onLogout }) {
+export default function DangerZoneTab({ navigate, onShowToast, onLogout, hasPassword, deletePassword, onDeletePasswordChange, onDeleteAccount }) {
   return (
     <div className="view active">
       <div className="danger-zone">
@@ -28,6 +28,22 @@ export default function DangerZoneTab({ navigate, onShowToast, onLogout }) {
             Deactivate
           </button>
         </div>
+
+        {hasPassword && (
+          <form className="dz-item" onSubmit={onDeleteAccount}>
+            <label className="field">
+              <span>Confirm your password to delete your account</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={deletePassword}
+                onChange={(event) => onDeletePasswordChange(event.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" className="btn-danger">Delete Account</button>
+          </form>
+        )}
 
         <div className="dz-item">
           <div>

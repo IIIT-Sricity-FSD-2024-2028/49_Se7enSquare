@@ -16,7 +16,7 @@ import { API_BASE, clearUserSession, handleRoleMismatch } from './services/api';
  */
 const originalFetch = window.fetch;
 window.fetch = async (input, init = {}) => {
-  let url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
   const isApi =
     url.startsWith('/api') ||
     url.includes('/api/') ||
@@ -24,12 +24,7 @@ window.fetch = async (input, init = {}) => {
     url.includes('localhost:3000');
 
   if (isApi) {
-    let user = null;
-    try {
-      const raw = localStorage.getItem('nexus_user') || localStorage.getItem('currentUser') || localStorage.getItem('user');
-      if (raw) user = JSON.parse(raw);
-    } catch {}
-
+    const user = store.getState().auth.user;
     const headers = new Headers(init.headers || (input instanceof Request ? input.headers : {}));
     if (user?.id && !headers.has('x-user-id')) {
       headers.set('x-user-id', String(user.id));
@@ -64,7 +59,7 @@ window.fetch = async (input, init = {}) => {
           }
         }
       }
-    } catch {}
+    } catch { /* Ignore unreadable response bodies. */ }
 
     return response;
   }

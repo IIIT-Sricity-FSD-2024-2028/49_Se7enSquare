@@ -5,44 +5,24 @@
 
 export const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-/**
- * Retrieves the currently stored user session safely without sensitive fields.
- */
-export function getStoredUser() {
-  try {
-    const raw =
-      localStorage.getItem('nexus_user') ||
-      localStorage.getItem('currentUser') ||
-      localStorage.getItem('user');
-    if (!raw) return null;
-    const user = JSON.parse(raw);
-    if (!user || typeof user !== 'object') return null;
-    if (user) {
-      delete user.password;
-      delete user.passwordHash;
-    }
-    if (user.id !== undefined && user.id !== null && !isNaN(Number(user.id))) {
-      user.id = Number(user.id);
-    }
-    return user;
-  } catch {
-    return null;
-  }
+let readSession = () => null;
+let endSession = () => {};
+
+export function configureSession({ read, end }) {
+  readSession = read;
+  endSession = end;
 }
 
-/**
- * Clears authenticated session from localStorage.
- */
+export function getStoredUser() {
+  return readSession();
+}
+
 export function clearUserSession() {
-  localStorage.removeItem('user');
-  localStorage.removeItem('nexus_user');
-  localStorage.removeItem('currentUser');
-  localStorage.removeItem('role');
+  endSession();
 }
 
 /**
  * Reduces a backend user object to the whitelisted session fields.
- * Used both for localStorage and for the Redux auth slice, so both hold the same shape.
  */
 export function toSessionUser(user) {
   if (!user) return null;
@@ -62,36 +42,6 @@ export function toSessionUser(user) {
   };
 }
 
-/**
- * Persists an authenticated user session into localStorage with whitelisted fields only.
- * React code should dispatch the auth slice actions instead; the store's listener
- * middleware calls this so localStorage (read by apiRequest) stays in sync.
- */
-export function storeUserSession(user) {
-  const safeSession = toSessionUser(user);
-  if (!safeSession) {
-    clearUserSession();
-    return;
-  }
-
-  localStorage.removeItem('user');
-  localStorage.setItem('nexus_user', JSON.stringify(safeSession));
-  localStorage.setItem('currentUser', JSON.stringify(safeSession));
-  localStorage.setItem('role', safeSession.role);
-}
-
-/**
- * If an admin changes a user's role, the session in localStorage still has the
- * OLD role, so every request sends a stale x-role header. The backend guard
- * (auth-context.guard.ts) then answers 403 "Role mismatch: declared role does
- * not match user account role in database". In that case we log out and send
- * the user to /login so they get a fresh session with the new role.
- *
- * Note: roles.guard.ts also says "Role mismatch: access denied" when a role is
- * simply not allowed to do something. That one must NOT log out, so we match
- * only the "declared role does not match" text.
- * Returns true if it handled the error.
- */
 export function handleRoleMismatch(data) {
   const message = data && typeof data === 'object' ? String(data.message || '') : '';
   if (!message.includes('declared role does not match')) return false;
@@ -107,7 +57,7 @@ export function handleRoleMismatch(data) {
  */
 export async function apiRequest(endpoint, options = {}) {
   const user = getStoredUser();
-  const role = user?.role || localStorage.getItem('role') || 'user';
+  const role = user?.role || 'user';
 
   const url = endpoint.startsWith('http')
     ? endpoint

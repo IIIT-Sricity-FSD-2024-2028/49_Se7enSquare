@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useAppSelector } from '../store/hooks';
 import { selectCurrentUser } from '../store/slices/authSlice';
 
 function getInitials(user) {
@@ -22,7 +22,7 @@ export default function Header({
   onAvatarClick,
 }) {
   const navigate = useNavigate();
-  const initials = getInitials(useSelector(selectCurrentUser));
+  const initials = getInitials(useAppSelector(selectCurrentUser));
 
   const handleAvatarClick = () => {
     if (onAvatarClick) {

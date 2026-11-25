@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { DEFAULT_CHANNELS, EMOJIS } from '../data/chatData';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import { toastShown } from '../../../store/slices/uiSlice';
@@ -10,9 +10,14 @@ import {
   fetchChatMessages,
   sendChatMessage,
   toggleChatReaction,
+  togglePinMessage,
+  deleteChatMessage,
+  chatUiChanged,
   chatCleared,
   selectChat,
 } from '../../../store/slices/chatSlice';
+
+import { selectFilteredChannels, selectFilteredMessages, selectPinnedMessages, selectChatStats } from '../../../store/selectors/chatSelectors';
 
 // Shown when the page is opened without ?community=
 const NO_COMMUNITY_CHANNEL = { id: 'general', name: 'general', topic: 'The main hub 👋' };
@@ -33,13 +38,9 @@ function toChatUser(raw) {
   };
 }
 
-/**
- * Connects the Chat page to the Redux chat slice (channels, members, messages).
- * The active channel, input box, search and panel toggles are page-only UI state.
- */
 export default function useChat() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
 
   const communityId    = searchParams.get('community') || '';
@@ -47,45 +48,44 @@ export default function useChat() {
   const initialChannel = decodeURIComponent(searchParams.get('channel') || 'general');
 
   const messagesEndRef = useRef(null);
-  const user = toChatUser(useSelector(selectCurrentUser));
-  const { channels, channelsLoading, members, messages } = useSelector(selectChat);
-
-  const [selectedChannel, setActiveChannel] = useState(
-    () => DEFAULT_CHANNELS.find(c => c.name === initialChannel) || DEFAULT_CHANNELS[0]
-  );
+  const user = toChatUser(useAppSelector(selectCurrentUser));
+  const {
+    channels, channelsLoading, members, messages, selectedChannelId, sendingMessage,
+    msgInput, channelSearch, msgSearchQuery, replyTo, showEmojiPicker, showSearch,
+    showPinned, showMembers, muted, deafened,
+  } = useAppSelector(selectChat);
+  const selectedChannel = channels.find((channel) => channel.id === selectedChannelId) ||
+    channels.find((channel) => channel.name === initialChannel || channel.id === initialChannel) ||
+    channels[0] || DEFAULT_CHANNELS[0];
   const activeChannel = communityId ? selectedChannel : NO_COMMUNITY_CHANNEL;
   const loading = communityId ? channelsLoading : false;
+  const setActiveChannel = (channel) => dispatch(chatUiChanged({ selectedChannelId: channel.id }));
 
-  const [msgInput,        setMsgInput]        = useState('');
-  const [channelSearch,   setChannelSearch]   = useState('');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showSearch,      setShowSearch]      = useState(false);
-  const [msgSearchQuery,  setMsgSearchQuery]  = useState('');
-  const [showPinned,      setShowPinned]      = useState(false);
-  const [showMembers,     setShowMembers]     = useState(true);
-  const [replyTo,         setReplyTo]         = useState(null);
-  const [muted,           setMuted]           = useState(false);
-  const [deafened,        setDeafened]        = useState(false);
+  const setField = (field, update) => dispatch((send, getState) => {
+    const value = typeof update === 'function' ? update(getState().chat[field]) : update;
+    send(chatUiChanged({ [field]: value }));
+  });
+
+  const setMsgInput = (value) => setField('msgInput', value);
+  const setChannelSearch = (value) => setField('channelSearch', value);
+  const setMsgSearchQuery = (value) => setField('msgSearchQuery', value);
+  const setReplyTo = (value) => setField('replyTo', value);
+  const setShowEmojiPicker = (value) => setField('showEmojiPicker', value);
+  const setShowSearch = (value) => setField('showSearch', value);
+  const setShowPinned = (value) => setField('showPinned', value);
+  const setShowMembers = (value) => setField('showMembers', value);
+  const setMuted = (value) => setField('muted', value);
+  const setDeafened = (value) => setField('deafened', value);
 
   const showToast = (msg) => dispatch(toastShown({ msg }));
 
   // Channels and members of this community
   useEffect(() => {
-    if (!communityId) {
-      dispatch(chatCleared());
-      return;
+    if (communityId) {
+      dispatch(fetchChatChannels(communityId));
+      dispatch(fetchChatMembers(communityId));
     }
-    let cancelled = false;
-    dispatch(fetchChatChannels(communityId)).unwrap()
-      .then((parsed) => {
-        if (cancelled) return;
-        setActiveChannel(parsed.length > 0
-          ? parsed.find(c => c.name === initialChannel || c.id === initialChannel) || parsed[0]
-          : { id: 'general', name: 'general', topic: 'General discussion' });
-      })
-      .catch(() => { /* keep the default channels */ });
-    dispatch(fetchChatMembers(communityId));
-    return () => { cancelled = true; };
+    return () => dispatch(chatCleared());
   }, [dispatch, communityId, initialChannel]);
 
   // Messages of the active channel of THIS community
@@ -103,7 +103,7 @@ export default function useChat() {
     const text = msgInput.trim();
     // Every message must belong to a real community. Before, a missing
     // communityId fell back to community 1, so messages ended up there.
-    if (!text || !activeChannel?.id || !communityId) return;
+    if (!text || !activeChannel?.id || !communityId || sendingMessage) return;
 
     const content = replyTo ? `↩️ ${replyTo}: ${text}` : text;
     setMsgInput('');
@@ -115,10 +115,9 @@ export default function useChat() {
         channelId: activeChannel.id,
         content,
         authorName: user.username || user.firstName || 'User',
-        sentAt: new Date().toISOString(),
       })).unwrap();
     } catch (err) {
-      // The slice has removed the message again; give the text back to retry
+      // Keep any new draft text and restore the failed message if the draft is empty.
       setMsgInput(prev => prev || text);
       showToast(`⚠️ Message not sent: ${err.message}`);
     }
@@ -132,13 +131,15 @@ export default function useChat() {
     }
   };
 
-  const filteredChannels = channels.filter(c =>
-    !channelSearch || c.name.toLowerCase().includes(channelSearch.toLowerCase())
-  );
+  const filteredChannels = useAppSelector(selectFilteredChannels);
+  const filteredMessages = useAppSelector(selectFilteredMessages);
+  const pinnedMessages = useAppSelector(selectPinnedMessages);
+  const stats = useAppSelector(selectChatStats);
 
-  const filteredMessages = msgSearchQuery
-    ? messages.filter(m => m.text.toLowerCase().includes(msgSearchQuery.toLowerCase()))
-    : messages;
+  const togglePin = (id) => dispatch(togglePinMessage(id));
+  const removeMessage = (id) => {
+    if (window.confirm('Delete this message?')) dispatch(deleteChatMessage(id));
+  };
 
   return {
     // Identity / routing
@@ -151,7 +152,7 @@ export default function useChat() {
     filteredChannels,
     // Message state
     messages, filteredMessages,
-    members,
+    members, pinnedMessages, stats,
     msgInput, setMsgInput,
     msgSearchQuery, setMsgSearchQuery,
     replyTo, setReplyTo,
@@ -163,7 +164,7 @@ export default function useChat() {
     muted, setMuted,
     deafened, setDeafened,
     // Actions
-    sendMessage, toggleReaction,
+    sendMessage, toggleReaction, togglePin, removeMessage,
     EMOJIS,
   };
 }

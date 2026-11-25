@@ -2,7 +2,7 @@
  * Authentication Service Module
  * Handles the login and registration API calls.
  * The session itself lives in the Redux auth slice: callers dispatch
- * loginSuccess(user) / logout(), and the store keeps localStorage in sync.
+ * loginSuccess(user) / logout(), and API clients read that session from the store.
  */
 import { apiRequest, getStoredUser } from './api';
 

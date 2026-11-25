@@ -4,6 +4,14 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AppealsService {
+  remove(id: number, userId: number): { id: number } {
+    const index = db.appeals.findIndex((item) => item.id === id && item.userId === userId && item.status === 'pending');
+    if (index === -1) throw new NotFoundException('No removable record found');
+    db.appeals.splice(index, 1);
+    saveDb();
+    return { id };
+  }
+
   findAll(userId?: number): AppealRecord[] {
     if (userId) {
       return db.appeals.filter((appeal) => appeal.userId === userId);

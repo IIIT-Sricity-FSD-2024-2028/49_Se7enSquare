@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
   fetchCommunityList,
@@ -12,11 +12,14 @@ import {
 } from '../../../store/slices/communitiesSlice';
 import { fetchEvents, selectApprovedEvents } from '../../../store/slices/eventsSlice';
 import {
+  clearNotifications,
   fetchNotifications,
   markAllNotificationsRead,
   selectRecentNotifications,
-  selectUnreadCount,
 } from '../../../store/slices/notificationsSlice';
+
+import { dashboardSearchChanged, resetDashboardSearch } from '../../../store/slices/uiSlice';
+import { selectDashboardSearch, selectDashboardSearchResults, selectUnreadNotifications } from '../../../store/selectors/authDashboardSelectors';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -32,8 +35,8 @@ function getGreeting() {
  */
 export default function useDashboard() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const sessionUser = useSelector(selectCurrentUser);
+  const dispatch = useAppDispatch();
+  const sessionUser = useAppSelector(selectCurrentUser);
   const user = useMemo(() => ({
     id: sessionUser?.id,
     firstName: sessionUser?.firstName || sessionUser?.username || 'User',
@@ -42,17 +45,21 @@ export default function useDashboard() {
     role: sessionUser?.role || 'user',
   }), [sessionUser]);
 
-  const allCommunities = useSelector(selectAllCommunities);
-  const communities = useSelector(selectJoinedCommunities).slice(0, 8);
-  const createdCommunities = useSelector(selectOwnedCommunities).slice(0, 8);
-  const loading = useSelector(selectCommunityListLoading);
-  const approvedEvents = useSelector(selectApprovedEvents);
-  const notifications = useSelector(selectRecentNotifications);
-  const unreadCount = useSelector(selectUnreadCount);
+  const allCommunities = useAppSelector(selectAllCommunities);
+  const communities = useAppSelector(selectJoinedCommunities).slice(0, 8);
+  const createdCommunities = useAppSelector(selectOwnedCommunities).slice(0, 8);
+  const loading = useAppSelector(selectCommunityListLoading);
+  const approvedEvents = useAppSelector(selectApprovedEvents);
+  const notifications = useAppSelector(selectRecentNotifications);
+  const unreadCount = useAppSelector(selectUnreadNotifications).length;
+  const { searchQuery, showSearch } = useAppSelector(selectDashboardSearch);
+  const searchResults = useAppSelector(selectDashboardSearchResults);
+  const setShowSearch = (value) => dispatch(dashboardSearchChanged({ showSearch: value }));
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearch, setShowSearch] = useState(false);
+  useEffect(() => () => {
+    dispatch(resetDashboardSearch());
+    dispatch(clearNotifications());
+  }, [dispatch]);
 
   const fetchData = useCallback(() => {
     if (sessionUser?.id === undefined || sessionUser?.id === null) {
@@ -81,24 +88,8 @@ export default function useDashboard() {
     type: '📅',
   })), [approvedEvents, allCommunities]);
 
-  const handleSearch = (val) => {
-    setSearchQuery(val);
-    if (!val.trim()) {
-      setShowSearch(false);
-      return;
-    }
-    const lower = val.toLowerCase();
-    const allComms = [...communities, ...createdCommunities];
-    const results = [
-      ...allComms
-        .filter((c) => c.name?.toLowerCase().includes(lower))
-        .map((c) => ({ type: 'community', id: c.id, label: c.name, icon: c.icon || '🏘️' })),
-      ...events
-        .filter((e) => e.title?.toLowerCase().includes(lower))
-        .map((e) => ({ type: 'event', id: e.id, label: e.title, icon: '📅' })),
-    ];
-    setSearchResults(results.slice(0, 6));
-    setShowSearch(true);
+  const handleSearch = (value) => {
+    dispatch(dashboardSearchChanged({ searchQuery: value, showSearch: Boolean(value.trim()) }));
   };
 
   const markAllRead = () => {

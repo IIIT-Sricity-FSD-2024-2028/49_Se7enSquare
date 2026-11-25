@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiRequest } from '../../services/api';
 import { logout, profileUpdated } from './authSlice';
+import { DEFAULT_PRIVACY, EMPTY_PASSWORDS, EMPTY_ORGANISER, EMPTY_STATEMENT } from '../../Components/platform/data/profileSettingsData';
 import { fetchSubscriptionStatus } from './pricingSlice';
 
 /**
@@ -57,9 +58,15 @@ export const fetchProfileSettings = createAsyncThunk(
       ORGANISER_ROLES.includes(profile.role) ? load('organiser', '/organisers/profile') : null,
       MODERATOR_ROLES.includes(profile.role) ? load('moderator', '/moderator-certification/status') : null,
     ]);
-    return { profile, organiser, moderator, errors };
+    return { profile, organiser, moderator, errors, fetchedAt: Date.now() };
   },
-  { condition: hasUser }
+  {
+    condition: (force, context) => {
+      const { lastFetched, settingsRequestId } = context.getState().profile;
+      return hasUser(force, context) && !settingsRequestId &&
+        (force || Date.now() - lastFetched >= 60_000);
+    },
+  }
 );
 
 // changes: only the fields that differ from the saved profile (plus privacy).
@@ -126,7 +133,37 @@ export const applyModerator = createAsyncThunk(
   }
 );
 
+export const deleteAccount = createAsyncThunk('profile/deleteAccount', async (password, { dispatch }) => {
+  await apiRequest('/users/me', { method: 'DELETE', body: JSON.stringify({ password }) });
+  dispatch(logout());
+});
+
+const initialForm = {
+  formData: null, privacy: null, passwords: EMPTY_PASSWORDS, showPassword: {},
+  avatarPreview: '', activeTab: 'profile', errors: [], toastMsg: '',
+  applicationErrors: null, organiserForm: EMPTY_ORGANISER, statement: EMPTY_STATEMENT,
+  questions: [], quizAnswers: [], quizOpen: false, showCustomOrganiser: false,
+  deletePassword: '',
+};
+
+export const profileFieldsOf = (user = {}) => Object.fromEntries(
+  ['firstName', 'lastName', 'username', 'email', 'phone', 'bio', 'avatar']
+    .map((key) => [key, user[key] ?? '']),
+);
+
+export const getProfileFieldDefault = (profile, field) => {
+  if (field === 'formData') return profileFieldsOf(profile.me || {});
+  if (field === 'privacy') return { ...DEFAULT_PRIVACY, ...profile.me?.privacy };
+  if (field === 'applicationErrors') return profile.settingsErrors;
+  return initialForm[field];
+};
+
 const initialState = {
+  settingsErrors: {},
+  loadErrors: [],
+  lastFetched: 0,
+  settingsRequestId: null,
+  settingsForm: initialForm,
   me: null,
   loading: true,
   organiser: null,
@@ -138,23 +175,39 @@ const initialState = {
 const profileSlice = createSlice({
   name: 'profile',
   initialState,
-  reducers: {},
+  reducers: {
+    profileFormChanged(state, { payload }) {
+      Object.assign(state.settingsForm, payload);
+    },
+    resetProfileForm(state) {
+      state.settingsForm = initialForm;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchMyProfile.fulfilled, (state, action) => {
         state.me = action.payload;
       })
-      .addCase(fetchProfileSettings.pending, (state) => {
+      .addCase(fetchProfileSettings.pending, (state, action) => {
+        state.settingsRequestId = action.meta.requestId;
         state.loading = true;
       })
       .addCase(fetchProfileSettings.fulfilled, (state, action) => {
+        if (state.settingsRequestId !== action.meta.requestId) return;
+        state.settingsRequestId = null;
+        state.lastFetched = action.payload.fetchedAt;
         state.loading = false;
         state.me = action.payload.profile;
         state.organiser = action.payload.organiser;
         state.moderator = action.payload.moderator;
+        state.settingsErrors = action.payload.errors;
+        state.loadErrors = [];
       })
-      .addCase(fetchProfileSettings.rejected, (state) => {
+      .addCase(fetchProfileSettings.rejected, (state, action) => {
+        if (state.settingsRequestId !== action.meta.requestId) return;
+        state.settingsRequestId = null;
         state.loading = false;
+        state.loadErrors = action.payload || [action.error.message];
       })
 
       .addCase(saveProfile.pending, (state) => {
@@ -202,6 +255,8 @@ const profileSlice = createSlice({
       .addCase(logout, () => initialState);
   },
 });
+
+export const { profileFormChanged, resetProfileForm } = profileSlice.actions;
 
 export const selectProfile = (state) => state.profile.me;
 export const selectProfileState = (state) => state.profile;

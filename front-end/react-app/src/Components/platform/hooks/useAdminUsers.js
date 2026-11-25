@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
   fetchUsers,
@@ -10,6 +10,7 @@ import {
   userSearchChanged,
   userRoleFilterChanged,
   editingUserChanged,
+  resetUserFilters,
   selectAdminUsers,
   selectUserSearch,
   selectUserRoleFilter,
@@ -23,20 +24,21 @@ import {
  * confirmation prompts, the "not yourself" guards and the toasts.
  */
 export default function useAdminUsers(showToast) {
-  const dispatch = useDispatch();
-  const adminId = useSelector(selectCurrentUser)?.id;
-  const users = useSelector(selectAdminUsers);
-  const userSearch = useSelector(selectUserSearch);
-  const userRoleFilter = useSelector(selectUserRoleFilter);
-  const editingUser = useSelector(selectEditingUser);
-  const filteredUsers = useSelector(selectFilteredUsers);
+  const dispatch = useAppDispatch();
+  const adminId = useAppSelector(selectCurrentUser)?.id;
+  const users = useAppSelector(selectAdminUsers);
+  const userSearch = useAppSelector(selectUserSearch);
+  const userRoleFilter = useAppSelector(selectUserRoleFilter);
+  const editingUser = useAppSelector(selectEditingUser);
+  const filteredUsers = useAppSelector(selectFilteredUsers);
 
   const refreshUsers = useCallback(() => dispatch(fetchUsers()), [dispatch]);
 
   // Initial load once on mount
   useEffect(() => {
     refreshUsers();
-  }, [refreshUsers]);
+    return () => dispatch(resetUserFilters());
+  }, [dispatch, refreshUsers]);
 
   const usernameOf = (userId) => users.find((u) => u.id === userId)?.username;
 
