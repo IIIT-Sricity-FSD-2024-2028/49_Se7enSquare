@@ -1,0 +1,57 @@
+import { configureStore } from '@reduxjs/toolkit';
+import authReducer, { logout } from './slices/authSlice';
+import { configureSession } from '../services/api';
+import uiReducer from './slices/uiSlice';
+import pricingReducer from './slices/pricingSlice';
+import reportReducer from './slices/reportSlice';
+import communitySettingsReducer from './slices/communitySettingsSlice';
+import adminUsersReducer from './slices/adminUsersSlice';
+import adminCommunitiesReducer from './slices/adminCommunitiesSlice';
+import adminModerationReducer from './slices/adminModerationSlice';
+import auditLogReducer from './slices/auditLogSlice';
+import communitiesReducer from './slices/communitiesSlice';
+import eventsReducer from './slices/eventsSlice';
+import organizerReducer from './slices/organizerSlice';
+import modPanelReducer from './slices/modPanelSlice';
+import notificationsReducer from './slices/notificationsSlice';
+import ownerDashboardReducer from './slices/ownerDashboardSlice';
+import profileReducer from './slices/profileSlice';
+import appealReducer from './slices/appealSlice';
+import chatReducer from './slices/chatSlice';
+import { listenerMiddleware } from './listenerMiddleware';
+
+/**
+ * Single Redux store for the whole app.
+ * Each feature adds its slice under `reducer`.
+ */
+export const store = configureStore({
+  // Form drafts and thunk arguments can contain account credentials.
+  devTools: false,
+  reducer: {
+    auth: authReducer,
+    ui: uiReducer,
+    pricing: pricingReducer,
+    report: reportReducer,
+    communitySettings: communitySettingsReducer,
+    adminUsers: adminUsersReducer,
+    adminCommunities: adminCommunitiesReducer,
+    adminModeration: adminModerationReducer,
+    auditLog: auditLogReducer,
+    communities: communitiesReducer,
+    events: eventsReducer,
+    organizer: organizerReducer,
+    modPanel: modPanelReducer,
+    notifications: notificationsReducer,
+    ownerDashboard: ownerDashboardReducer,
+    profile: profileReducer,
+    appeal: appealReducer,
+    chat: chatReducer,
+  },
+  // The listener middleware goes first, as recommended by Redux Toolkit
+  middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+});
+
+configureSession({
+  read: () => store.getState().auth.user,
+  end: () => store.dispatch(logout()),
+});

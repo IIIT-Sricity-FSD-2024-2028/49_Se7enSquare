@@ -1,29 +1,73 @@
 /**
- * Se7enSquare — Live API Client
+ * Gameunity — Live API Client
  * Replaces all window.NexusCRUD / window.NexusData mock calls.
  * All requests go to the NestJS backend at http://localhost:3000/api
  */
 
 const API_BASE = 'http://localhost:3000/api';
 
-// ── Role resolution ──────────────────────────────────────────────────────────
-// Read role from localStorage session; fall back to 'user'.
-function getRole() {
+// ── Role and Identity resolution ─────────────────────────────────────────────
+function getAuthContext() {
     try {
-        const user = JSON.parse(localStorage.getItem('nexus_user') || '{}');
-        return typeof normalizeRole === 'function' ? normalizeRole(user.role) : (user.role || 'user');
+        const raw = localStorage.getItem('nexus_user') || localStorage.getItem('currentUser');
+        if (!raw) return { role: 'user', id: null };
+        const user = JSON.parse(raw);
+        const role = typeof normalizeRole === 'function' ? normalizeRole(user.role) : (user.role || 'user');
+        const rawId = user.id ?? user.userId ?? user._id;
+        const id = rawId !== undefined && rawId !== null && !isNaN(Number(rawId)) ? Number(rawId) : null;
+        return { role, id, user };
     } catch {
-        return 'user';
+        return { role: 'user', id: null };
     }
+}
+
+function getRole() {
+    return getAuthContext().role;
+}
+
+// ── Multipart upload wrapper ─────────────────────────────────────────────────
+// Separate from apiFetch since it must NOT set a JSON Content-Type header
+// (the browser needs to set the multipart/form-data boundary itself).
+async function apiUpload(file) {
+    const auth = getAuthContext();
+    const url = `${API_BASE}/uploads`;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    let res;
+    try {
+        res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'x-role': auth.role,
+                ...(auth.id !== null ? { 'x-user-id': String(auth.id) } : {})
+            },
+            body: formData
+        });
+    } catch (err) {
+        console.warn('[API] Backend unreachable for upload — is NestJS running on port 3000?');
+        throw new Error('Backend unreachable. Please start the NestJS server.');
+    }
+
+    if (!res.ok) {
+        let errBody = {};
+        try { errBody = await res.json(); } catch (_) {}
+        const msg = errBody.message || `HTTP ${res.status}`;
+        console.error(`[API] POST /uploads → ${res.status}`, msg);
+        throw new Error(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+
+    return await res.json();
 }
 
 // ── Core fetch wrapper ───────────────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
-    const role = getRole();
+    const auth = getAuthContext();
     const url = `${API_BASE}${path}`;
     const headers = {
         'Content-Type': 'application/json',
-        'x-role': role,
+        'x-role': auth.role,
+        ...(auth.id !== null ? { 'x-user-id': String(auth.id) } : {}),
         ...(options.headers || {})
     };
 
@@ -68,6 +112,7 @@ const DEFAULT_LOCAL_DATA = {
         { id: 2, name: 'Karmanya', username: 'karmanya', email: 'karmanya@gameunity.com', role: 'moderator' },
         { id: 3, name: 'Anant', username: 'anant', email: 'anant@gameunity.com', role: 'community_manager' },
         { id: 4, name: 'Awadhesh', username: 'awadhesh', email: 'awadhesh@gameunity.com', role: 'user' },
+        { id: 6, name: 'Organizer', username: 'org01', email: 'organizer@gameunity.com', role: 'organizer' },
     ],
     communities: [
         { id: 1, name: 'FPS Arena', description: 'Competitive FPS players and tournaments', ownerId: 4, tags: ['fps', 'esports'], icon: '⚡', category: 'Gaming', slug: 'fps-arena', memberCount: 12400, onlineCount: 842 },
@@ -124,10 +169,19 @@ function nextLocalId(records) {
     return records.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
 }
 
+const BACKEND_UNREACHABLE_MSG = 'Backend unreachable. Please start the NestJS server.';
+
 async function withLocalFallback(path, options, fallback) {
     try {
         return await apiFetch(path, options);
     } catch (err) {
+        // Only fall back to localStorage when the backend is genuinely
+        // unreachable (network failure) — apiFetch normalizes that one case
+        // to this exact message. Any other error is a real HTTP response
+        // from a live backend (a 403 plan-limit rejection, a 400 validation
+        // error, ...) and MUST propagate, or business rules like "free plan
+        // capped at 4 communities" would silently no-op instead of blocking.
+        if (err.message !== BACKEND_UNREACHABLE_MSG) throw err;
         console.warn(`[API] Falling back to localStorage for ${path}: ${err.message}`);
         return fallback();
     }
@@ -135,7 +189,7 @@ async function withLocalFallback(path, options, fallback) {
 
 function canUpdateEvents() {
     const role = getRole();
-    return role === 'community_manager' || role === 'admin';
+    return role === 'community_manager' || role === 'organizer' || role === 'admin';
 }
 
 function canDeleteEvents() {
@@ -202,6 +256,11 @@ const API = {
             try {
                 created = await apiFetch('/communities', { method: 'POST', body: JSON.stringify(body) });
             } catch (err) {
+                // Same rule as withLocalFallback: only synthesize a local
+                // community when the backend is unreachable, never when it
+                // rejected the request (e.g. the free-plan 4-community cap) —
+                // otherwise the plan limit silently does nothing.
+                if (err.message !== BACKEND_UNREACHABLE_MSG) throw err;
                 console.warn('[API] /communities POST fallback', err);
                 const records = localRead('communities');
                 created = { id: nextLocalId(records), ...body };
@@ -262,7 +321,7 @@ const API = {
             const created = {
                 id: Date.now(),
                 ...body,
-                status: role === 'community_manager' || role === 'admin' ? (body.status || 'approved') : 'pending',
+                status: role === 'community_manager' || role === 'organizer' || role === 'admin' ? (body.status || 'approved') : 'pending',
                 createdBy: currentUser?.name || currentUser?.username || body.createdBy || 'User'
             };
             if (created.status === 'approved') assertNoLocalEventClash(records, created);
@@ -271,7 +330,7 @@ const API = {
             return created;
         }),
         update:  (id, body)  => withLocalFallback(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, () => {
-            if (!canUpdateEvents()) throw new Error('Only Community Managers or Admins can update events');
+            if (!canUpdateEvents()) throw new Error('Only Community Managers, Organizers, or Admins can update events');
             const records = localRead('events');
             const item = records.find(record => Number(record.id) === Number(id));
             if (!item) throw new Error('Event not found');
@@ -285,6 +344,26 @@ const API = {
             if (!canDeleteEvents()) throw new Error('Only Admins can delete events');
             localWrite('events', localRead('events').filter(item => Number(item.id) !== Number(id)));
             return { message: `Event ${id} deleted` };
+        }),
+        registrants: (id)    => withLocalFallback(`/events/${id}/registrants`, { method: 'GET' }, () => {
+            const event = localRead('events').find(item => Number(item.id) === Number(id));
+            const users = localRead('users');
+            const registrants = localRead('eventRegistrations')
+                .filter(reg => Number(reg.eventId) === Number(id))
+                .map(reg => {
+                    const user = users.find(u => Number(u.id) === Number(reg.userId));
+                    return {
+                        registrationId: reg.id,
+                        userId: reg.userId,
+                        username: user?.username || `user#${reg.userId}`,
+                        fullName: reg.fullName || '',
+                        email: reg.contactEmail || user?.email || '',
+                        phone: reg.phone || '',
+                        inGameId: reg.inGameId || '',
+                        registeredAt: reg.registeredAt,
+                    };
+                });
+            return { eventId: Number(id), eventTitle: event?.title || '', registrants };
         }),
     },
     posts: {
@@ -322,7 +401,10 @@ const API = {
         }),
     },
     memberships: {
-        getAll:  ()          => API.get('/memberships'),
+        getAll:  (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return API.get(`/memberships${qs ? `?${qs}` : ''}`);
+        },
         create:  (body)      => API.post('/memberships', body),
         delete:  (id)        => API.delete(`/memberships/${id}`),
     },
@@ -368,6 +450,14 @@ const API = {
             localWrite('appeals', records);
             return item;
         }),
+        updateStatus: (id, status) => withLocalFallback(`/appeals/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }, () => {
+            const records = localRead('appeals');
+            const item = records.find(record => Number(record.id) === Number(id));
+            if (!item) throw new Error('Appeal not found');
+            item.status = status;
+            localWrite('appeals', records);
+            return item;
+        }),
     },
     messages: {
         getByChannel: (channelId) => withLocalFallback(`/channels/${encodeURIComponent(channelId)}/messages`, { method: 'GET' }, () => localRead('messages').filter(item => item.channelId === channelId)),
@@ -378,7 +468,7 @@ const API = {
             localWrite('messages', records);
             return created;
         }),
-        react: (id, emoji) => withLocalFallback(`/messages/${id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }, () => {
+        react: (id, emoji, actor = {}) => withLocalFallback(`/messages/${id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji, actorId: actor.id, actorName: actor.name }) }, () => {
             const records = localRead('messages');
             const item = records.find(record => Number(record.id) === Number(id));
             if (!item) throw new Error('Message not found');
@@ -425,9 +515,58 @@ const API = {
     },
     dashboard: {
         stats: ()            => API.get('/dashboard/stats'),
+        revenue: ()          => API.get('/dashboard/revenue'),
+    },
+    subscriptions: {
+        status:  (userId)         => API.get(`/subscriptions/status?userId=${encodeURIComponent(userId)}`),
+        upgrade: (userId, plan)   => API.post('/subscriptions/upgrade', { userId, plan }),
+        cancel:  (userId)         => API.post('/subscriptions/cancel', { userId }),
+        findAll: ()                => API.get('/subscriptions'),
+    },
+    organisers: {
+        getAll:       (status) => API.get(`/organisers${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+        apply:        (userId, experienceNote) => API.post('/organisers/apply', { userId, experienceNote }),
+        setStatus:    (id, status)             => API.patch(`/organisers/${id}`, { status }),
+        profile:      (userId)                 => API.get(`/organisers/profile?userId=${encodeURIComponent(userId)}`),
+        analytics:    (userId)                 => API.get(`/organisers/analytics?userId=${encodeURIComponent(userId)}`),
+        upgradePlan:  (userId, plan)           => API.post('/organisers/subscription/upgrade', { userId, plan }),
+    },
+    featuredEvents: {
+        getAll: ()                                   => API.get('/featured-events'),
+        create: (eventId, userId, durationDays = 7)  => API.post('/featured-events', { eventId, userId, durationDays }),
+        delete: (id)                                 => API.delete(`/featured-events/${id}`),
+    },
+    payments: {
+        history: (userId) => API.get(`/payments/history${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
+        summary: ()        => API.get('/payments/summary'),
+    },
+    moderatorCertification: {
+        getAll:    (status)                => API.get(`/moderator-certification${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+        quiz:      ()                      => API.get('/moderator-certification/quiz'),
+        apply:     (userId, answers)       => API.post('/moderator-certification/apply', { userId, answers }),
+        setStatus: (id, status)            => API.patch(`/moderator-certification/${id}`, { status }),
+        status:    (userId)                => API.get(`/moderator-certification/status?userId=${encodeURIComponent(userId)}`),
+    },
+    ratings: {
+        create:    (targetType, targetUserId, raterId, score, comment) => API.post('/ratings', { targetType, targetUserId, raterId, score, comment }),
+        forTarget: (targetType, targetUserId) => API.get(`/ratings?targetType=${encodeURIComponent(targetType)}&targetUserId=${encodeURIComponent(targetUserId)}`),
+    },
+    notifications: {
+        getAll: (userId) => API.get(`/notifications?userId=${encodeURIComponent(userId)}`),
+        markRead: (id, read = true) => API.patch(`/notifications/${id}`, { read }),
+        markAllRead: (userId) => API.patch('/notifications/read-all', { userId }),
+    },
+    uploads: {
+        // Uploads the file to POST /api/uploads and resolves with the server
+        // response, plus an `absoluteUrl` field ready to use in <img src>/href.
+        upload: async (file) => {
+            const result = await apiUpload(file);
+            const serverRoot = API_BASE.replace(/\/api\/?$/, '');
+            return { ...result, absoluteUrl: `${serverRoot}${result.fileUrl}` };
+        },
     },
 };
 
 window.API = API;
-console.log('%c[Se7enSquare] %cLive API client ready → http://localhost:3000/api',
+console.log('%c[Gameunity] %cLive API client ready → http://localhost:3000/api',
     'color: #5B6EF5; font-weight: bold;', 'color: #10B981;');

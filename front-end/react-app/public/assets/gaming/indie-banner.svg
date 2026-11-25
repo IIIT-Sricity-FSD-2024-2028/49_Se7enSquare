@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="synthBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#140a2b"/>
+      <stop offset="60%" stop-color="#2d124d"/>
+      <stop offset="100%" stop-color="#0a0515"/>
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="50%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="400" fill="url(#synthBg)"/>
+  <!-- Synthwave Neon Sun -->
+  <circle cx="600" cy="200" r="110" fill="url(#sunGrad)"/>
+  <!-- Sun Horizontal Blinds Cutouts -->
+  <rect x="480" y="195" width="240" height="4" fill="#2d124d"/>
+  <rect x="480" y="210" width="240" height="7" fill="#291048"/>
+  <rect x="480" y="230" width="240" height="11" fill="#210b3b"/>
+  <rect x="480" y="255" width="240" height="16" fill="#18072c"/>
+  <!-- Wireframe Mountain Peaks -->
+  <polygon points="100,280 280,170 420,280" fill="rgba(15, 6, 32, 0.9)" stroke="#ec4899" stroke-width="2"/>
+  <polygon points="350,280 500,190 650,280" fill="rgba(15, 6, 32, 0.85)" stroke="#a855f7" stroke-width="2"/>
+  <polygon points="580,280 750,160 920,280" fill="rgba(15, 6, 32, 0.9)" stroke="#ec4899" stroke-width="2"/>
+  <polygon points="850,280 980,180 1120,280" fill="rgba(15, 6, 32, 0.85)" stroke="#a855f7" stroke-width="2"/>
+  <!-- Perspective Cyber Floor Grid -->
+  <line x1="0" y1="280" x2="1200" y2="280" stroke="#06b6d4" stroke-width="2"/>
+  <line x1="0" y1="305" x2="1200" y2="305" stroke="rgba(6, 182, 212, 0.7)" stroke-width="1.5"/>
+  <line x1="0" y1="335" x2="1200" y2="335" stroke="rgba(6, 182, 212, 0.5)" stroke-width="1.5"/>
+  <line x1="0" y1="375" x2="1200" y2="375" stroke="rgba(6, 182, 212, 0.3)" stroke-width="1"/>
+  <!-- Vanishing Perspective Lines -->
+  <line x1="600" y1="280" x2="100" y2="400" stroke="rgba(6, 182, 212, 0.4)" stroke-width="1.5"/>
+  <line x1="600" y1="280" x2="350" y2="400" stroke="rgba(6, 182, 212, 0.4)" stroke-width="1.5"/>
+  <line x1="600" y1="280" x2="600" y2="400" stroke="rgba(6, 182, 212, 0.4)" stroke-width="1.5"/>
+  <line x1="600" y1="280" x2="850" y2="400" stroke="rgba(6, 182, 212, 0.4)" stroke-width="1.5"/>
+  <line x1="600" y1="280" x2="1100" y2="400" stroke="rgba(6, 182, 212, 0.4)" stroke-width="1.5"/>
+</svg>

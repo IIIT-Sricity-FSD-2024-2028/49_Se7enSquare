@@ -25,7 +25,7 @@
         <div class="tb-sep"></div>
         <div class="tb-page">⚙️ Profile &amp; Settings</div>
         <div class="tb-right">
-          <div class="tb-btn" onclick="location.reload()">Discard</div>
+          <div class="tb-btn" onclick="discardDraft()">Discard</div>
           <button class="tb-btn save" id="btnSaveAll" onclick="saveAllChanges()" disabled="">
             Save Changes
           </button>
@@ -61,6 +61,9 @@
             </div>
             <div class="ln-item" onclick="switchView('account', this)">
               <span class="ln-icon">🔐</span> Account &amp; Security
+            </div>
+            <div class="ln-item" onclick="switchView('membership', this)">
+              <span class="ln-icon">💎</span> Membership
             </div>
             <div class="ln-item" onclick="switchView('privacy', this)">
               <span class="ln-icon">🔒</span> Privacy
@@ -168,6 +171,39 @@
                   <div class="dot" style="background: var(--text-3)"></div>
                   Invisible
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="view" id="view-membership">
+            <div class="settings-card">
+              <div class="card-title">💎 Subscription Plan</div>
+              <div class="card-sub">Your current Gameunity plan and what it unlocks.</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;">
+                <div>
+                  <div id="ps-plan-name" style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;">—</div>
+                  <div id="ps-plan-sub" style="font-size:12px;color:var(--text-3);margin-top:2px;">Loading…</div>
+                </div>
+                <div class="btn-sm accent" onclick="window.location.href='pricing.html'">Manage Plan</div>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="card-title">🏆 Become an Organizer</div>
+              <div class="card-sub">Apply for Verified Organizer status to host and manage your own tournaments.</div>
+              <div id="ps-organizer-block" style="margin-top:12px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;">
+                <div id="ps-organizer-status" style="font-size:13px;color:var(--text-2);margin-bottom:10px;">Loading…</div>
+                <div class="btn-sm accent" id="ps-organizer-apply-btn" onclick="applyAsOrganizer()">Apply Now</div>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="card-title">🛡️ Become a Certified Moderator</div>
+              <div class="card-sub">Pass a short moderation-policy quiz, then get admin approval to earn the Certified Moderator badge.</div>
+              <div id="ps-moderator-block" style="margin-top:12px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;">
+                <div id="ps-moderator-status" style="font-size:13px;color:var(--text-2);margin-bottom:10px;">Loading…</div>
+                <div id="ps-moderator-quiz"></div>
+                <div class="btn-sm accent" id="ps-moderator-apply-btn" onclick="startModeratorQuiz()">Take the Quiz</div>
               </div>
             </div>
           </div>
@@ -435,7 +471,7 @@
                     Temporarily hide your profile and pause notifications.
                   </div>
                 </div>
-                <button class="btn-danger" onclick="toast('⚠️ Deactivation flow started…')">
+                <button class="btn-danger" onclick="toast('⚠️ Account deactivation isn\'t available yet. Contact an admin if you need this.')">
                   Deactivate
                 </button>
               </div>
@@ -457,44 +493,6 @@
       </div>
 
       <div class="toast" id="toast"><span id="toastMsg"></span></div>
-
-      <div class="modal-overlay" id="photoModal">
-        <div class="modal-box">
-          <div class="modal-header">
-            <span>Upload Profile Photo</span>
-            <span class="modal-close" onclick="closePhotoModal()">✕</span>
-          </div>
-          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-            <div style="font-size: 24px; margin-bottom: 10px">📁</div>
-            <div style="font-size: 14px; font-weight: 600">
-              Click to browse or drag file here
-            </div>
-            <div style="font-size: 11px; color: var(--text-3); margin-top: 6px">
-              Accepted formats: JPG, JPEG, PNG, WEBP (Max: 5MB)
-            </div>
-          </div>
-          <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp" style="display: none" onchange="handleFileSelect(event)">
-
-          <div id="filePreview" style="display: none; text-align: center; margin-bottom: 16px">
-            <img id="imgPreview" src="" alt="Preview" style="
-                width: 100px;
-                height: 100px;
-                border-radius: 50%;
-                object-fit: cover;
-                border: 2px solid var(--accent);
-                margin-bottom: 10px;
-              ">
-            <div id="fileName" style="font-size: 12px; color: var(--text-2)"></div>
-          </div>
-
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
-            <button class="tb-btn" onclick="closePhotoModal()">Cancel</button>
-            <button class="tb-btn save" id="btnApplyPhoto" onclick="applyUploadedPhoto()" disabled="">
-              Apply Photo
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <script src="../js/core/auth.js"></script>

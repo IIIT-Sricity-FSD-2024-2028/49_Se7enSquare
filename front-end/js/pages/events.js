@@ -1,5 +1,5 @@
 /**
- * Se7enSquare — Events Page
+ * Gameunity — Events Page
  * Fully backend-driven: all CRUD goes to /api/events & /api/communities
  */
 
@@ -27,23 +27,6 @@ function writeStoredEvents(events) {
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
 }
 
-function createEvent(data) {
-    const events = readStoredEvents();
-    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    const event = {
-        ...data,
-        id: Date.now(),
-        createdBy: currentUser?.username || currentUser?.name || data.createdBy || 'user1',
-        attendees: 0,
-        status: 'pending'
-    };
-
-    events.push(event);
-    writeStoredEvents(events);
-    alert('Event request sent for approval');
-    return event;
-}
-
 function isApprovedEvent(event) {
     return event.status === 'approved';
 }
@@ -51,7 +34,7 @@ function isApprovedEvent(event) {
 function canApproveEvents() {
     const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
     const role = typeof normalizeRole === 'function' ? normalizeRole(user?.role) : user?.role;
-    return role === 'community_manager' || role === 'manager' || role === 'admin';
+    return role === 'community_manager' || role === 'manager' || role === 'organizer' || role === 'admin';
 }
 
 function isSystemAdmin() {
@@ -311,41 +294,131 @@ function generateRegCard(ev, index) {
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
+// Registering asks for the registrant's details first (registerModal in
+// events.html); unregistering needs no form and stays a direct toggle.
 window.handleRegistrationToggle = async function (eventId) {
-    let registrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
+    const registrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
     const id = String(eventId);
     const isRegistered = registrations.includes(id);
     const event = _events.find(e => String(e.id) === id);
     if (!event) return;
-    const userId = await resolveCurrentUserId();
 
     if (isRegistered) {
-        const registration = _eventRegistrations.find(item => String(item.eventId) === id && Number(item.userId) === Number(userId));
-        if (registration) {
-            await window.API.eventRegistrations.delete(registration.id);
-            _eventRegistrations = _eventRegistrations.filter(item => item.id !== registration.id);
-        }
-        event.attendees = Math.max(0, (event.attendees || 0) - 1);
-        registrations = registrations.filter(r => r !== id);
-        if (window.toast) window.toast(`Unregistered from ${event.title}`);
+        if (!confirm(`Unregister from "${event.title}"? You'll lose your spot and may need to register again.`)) return;
+        await unregisterFromEvent(event);
     } else {
         if (event.maxAttendees && event.attendees >= event.maxAttendees) {
             if (window.toast) window.toast('Cannot register — Event is full!', 'error');
             return;
         }
-        const created = await window.API.eventRegistrations.create({ eventId: Number(eventId), userId });
+        openRegisterModal(event);
+    }
+};
+
+async function unregisterFromEvent(event) {
+    let registrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
+    const id = String(event.id);
+    const userId = await resolveCurrentUserId();
+
+    const registration = _eventRegistrations.find(item => String(item.eventId) === id && Number(item.userId) === Number(userId));
+    if (registration) {
+        await window.API.eventRegistrations.delete(registration.id);
+        _eventRegistrations = _eventRegistrations.filter(item => item.id !== registration.id);
+    }
+    event.attendees = Math.max(0, (event.attendees || 0) - 1);
+    registrations = registrations.filter(r => r !== id);
+    if (window.toast) window.toast(`Unregistered from ${event.title}`);
+
+    writeStoredEvents(_events);
+    try {
+        const refreshed = await window.API.events.getOne(event.id);
+        Object.assign(event, refreshed);
+    } catch (err) {}
+    localStorage.setItem('nexus_registered_events', JSON.stringify(registrations));
+    renderAll();
+}
+
+// ── Registration details modal ──────────────────────────────────────────────
+let _pendingRegistrationEvent = null;
+
+function openRegisterModal(event) {
+    _pendingRegistrationEvent = event;
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+
+    document.getElementById('regModalEventTitle').textContent = event.title || 'this event';
+    document.getElementById('regFullName').value = user?.fullName || user?.name || '';
+    document.getElementById('regEmail').value = user?.email || '';
+    document.getElementById('regPhone').value = user?.phone || '';
+    document.getElementById('regInGameId').value = user?.username || '';
+    document.querySelectorAll('#registerModal .error-msg').forEach(e => { e.textContent = ''; e.classList.remove('show'); });
+
+    document.getElementById('registerModal')?.classList.remove('hidden');
+}
+
+window.closeRegisterModal = function () {
+    document.getElementById('registerModal')?.classList.add('hidden');
+    _pendingRegistrationEvent = null;
+};
+
+window.submitEventRegistration = async function () {
+    const event = _pendingRegistrationEvent;
+    if (!event) return;
+
+    const fullNameEl = document.getElementById('regFullName');
+    const emailEl    = document.getElementById('regEmail');
+    const phoneEl    = document.getElementById('regPhone');
+    const inGameIdEl = document.getElementById('regInGameId');
+
+    const fullName = fullNameEl.value.trim();
+    const email    = emailEl.value.trim();
+    const phone    = phoneEl.value.trim();
+    const inGameId = inGameIdEl.value.trim();
+
+    let isValid = true;
+    const showError = (errId, msg) => {
+        const errEl = document.getElementById(errId);
+        if (errEl) { errEl.textContent = msg; errEl.classList.add('show'); }
+        isValid = false;
+    };
+    document.querySelectorAll('#registerModal .error-msg').forEach(e => { e.textContent = ''; e.classList.remove('show'); });
+
+    if (!fullName) showError('err-regFullName', 'Full name is required');
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) showError('err-regEmail', 'A valid email is required');
+    if (!phone || phone.replace(/\D/g, '').length < 7) showError('err-regPhone', 'A valid phone number is required');
+    if (!inGameId || !/^[a-zA-Z0-9_.\- ]{3,24}$/.test(inGameId)) {
+        showError('err-regInGameId', 'Required — 3-24 characters, letters/numbers/_-. only');
+    }
+    if (!isValid) return;
+
+    const registrations = JSON.parse(localStorage.getItem('nexus_registered_events') || '[]');
+    const id = String(event.id);
+    const userId = await resolveCurrentUserId();
+
+    try {
+        const created = await window.API.eventRegistrations.create({
+            eventId: Number(event.id),
+            userId,
+            fullName,
+            contactEmail: email,
+            phone,
+            inGameId,
+        });
         _eventRegistrations.push(created);
         event.attendees = (event.attendees || 0) + 1;
         registrations.push(id);
         if (window.toast) window.toast(`Registered for ${event.title}! 🎟`);
+    } catch (err) {
+        if (window.toast) window.toast('Could not register: ' + err.message, 'error');
+        return;
     }
 
     writeStoredEvents(_events);
     try {
-        const refreshed = await window.API.events.getOne(eventId);
+        const refreshed = await window.API.events.getOne(event.id);
         Object.assign(event, refreshed);
     } catch (err) {}
     localStorage.setItem('nexus_registered_events', JSON.stringify(registrations));
+    window.closeRegisterModal();
     renderAll();
 };
 
@@ -453,7 +526,7 @@ async function handleEventSubmit() {
             maxAttendees: Number(maxEl.value),
             category: categoryEl.value,
             type: selectedEventType,
-            status: canApproveEvents() ? 'approved' : 'pending',
+            status: 'pending', // every new event needs explicit review, regardless of who created it
             attendees: 0,
             createdBy: (typeof getCurrentUser === 'function' ? getCurrentUser()?.username : null) || 'user',
             coverImage: window.currentEventCover || ''
@@ -461,9 +534,10 @@ async function handleEventSubmit() {
         _events.push(created);
         writeStoredEvents(_events);
         if (window.toast) {
-            window.toast(`"${titleEl.value.trim()}" submitted for manager approval.`);
+            window.toast(`"${titleEl.value.trim()}" submitted for approval.`);
+        } else {
+            console.warn('[Events] window.toast unavailable — event created but no confirmation shown.');
         }
-        else alert('Event sent for approval');
         resetForm();
         const btn = document.querySelector('.tab-btn[onclick*="upcoming"]');
         switchTab('upcoming', btn || document.querySelector('.tab-btn'));
@@ -522,6 +596,40 @@ window.saveDraft = function () {
     });
     localStorage.setItem('eventDrafts', JSON.stringify(drafts));
     if (window.toast) window.toast('Draft saved locally.');
+};
+
+// Drafts could be saved (saveDraft(), above) but never loaded back anywhere —
+// the button existed, nothing consumed what it wrote. This closes that loop.
+window.loadLatestDraft = function () {
+    const drafts = JSON.parse(localStorage.getItem('eventDrafts') || '[]');
+    if (drafts.length === 0) {
+        if (window.toast) window.toast('No saved drafts yet.');
+        return;
+    }
+
+    const draft = drafts[drafts.length - 1];
+    const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value ?? ''; };
+
+    setVal('evTitle', draft.title);
+    setVal('evDesc', draft.description);
+    setVal('evDate', draft.date);
+    setVal('evTime', draft.time);
+    setVal('evCommunity', draft.communityId);
+    setVal('evMax', draft.capacity);
+    setVal('evCategory', draft.category);
+    window.currentEventCover = draft.coverImage || '';
+
+    if (draft.coverImage) {
+        const uploadPreview = document.getElementById('uploadPreview');
+        const uploadDefault = document.getElementById('uploadDefault');
+        if (uploadPreview) {
+            uploadPreview.innerHTML = `<img src="${draft.coverImage}" alt="Event cover preview">`;
+            uploadPreview.style.display = 'block';
+        }
+        if (uploadDefault) uploadDefault.style.display = 'none';
+    }
+
+    if (window.toast) window.toast(`Loaded draft: "${draft.title || 'Untitled event'}"`);
 };
 
 function renderRoleControls() {

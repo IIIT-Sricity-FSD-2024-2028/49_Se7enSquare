@@ -19,6 +19,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -31,10 +32,10 @@ import { ReportsService } from './reports.service';
   name: 'x-role',
   required: true,
   description:
-    'RBAC role header. Accepted values: admin | community_manager | moderator | user. ' +
+    'RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. ' +
     'GET requires admin or moderator. POST requires any valid role. ' +
     'PATCH status requires admin or moderator. DELETE requires admin.',
-  schema: { type: 'string', enum: ['admin', 'community_manager', 'moderator', 'user'] },
+  schema: { type: 'string', enum: ['admin', 'community_manager', 'organizer', 'moderator', 'user'] },
 })
 @Controller('reports')
 export class ReportsController {
@@ -52,8 +53,13 @@ export class ReportsController {
     return this.reportsService.findAll();
   }
 
+  @Get('mine')
+  findMine(@CurrentUser('id') userId: number) {
+    return this.reportsService.findAll().filter((report) => report.reporterId === userId);
+  }
+
   @Post()
-  @Roles(AppRole.USER, AppRole.MODERATOR, AppRole.COMMUNITY_MANAGER, AppRole.ADMIN)
+  @Roles(AppRole.USER, AppRole.ORGANIZER, AppRole.MODERATOR, AppRole.COMMUNITY_MANAGER, AppRole.ADMIN)
   @ApiOperation({
     summary: 'Submit a report',
     description: 'Creates a new report (content or user report). Any authenticated role may submit a report. Status defaults to "pending".',
@@ -85,7 +91,7 @@ export class ReportsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateReportStatusDto,
   ) {
-    return this.reportsService.updateStatus(id, payload.status);
+    return this.reportsService.updateStatus(id, payload.status, payload.resolutionNote);
   }
 
   @Delete(':id')

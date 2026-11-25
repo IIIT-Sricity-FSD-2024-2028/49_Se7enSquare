@@ -11,18 +11,28 @@ let toastTimeout;
 
 const ROLE_REDIRECTS = {
     admin: 'admin-dashboard.html',
+    owner: 'owner-dashboard.html',
     community_manager: 'events.html',
+    organizer: 'organizer-dashboard.html',
     moderator: 'dashboard.html',
     user: 'dashboard.html',
     gamer: 'dashboard.html'
 };
 
-// Default users for the first-time load
+// Default users for the first-time load.
+// `id` is pinned to match the corresponding backend seed user in in-memory-db.ts
+// (admin01=1, mod01=2, cm01=3, player01=4, sanidhya=5, org01=6) — usernames differ
+// between the demo personas and backend seed, so /auth/login never matches and
+// these always resolve through the local fallback in handleLogin(); without a
+// matching numeric id here, every backend call that needs userId (subscriptions,
+// organiser applications, payments, ...) would silently operate on `undefined`.
 const DEFAULT_USERS = [
-    { email: 'rajat@gameunity.com', username: 'rajat', firstName: 'Rajat', lastName: 'Jain', password: 'Rajat@123', role: 'admin', avatar: null },
-    { email: 'karmanya@gameunity.com', username: 'karmanya', firstName: 'Karmanya', lastName: 'Bansal', password: 'Karmanya@123', role: 'moderator', avatar: null },
-    { email: 'anant@gameunity.com', username: 'anant', firstName: 'Anant', lastName: 'Gupta', password: 'Demo@123', role: 'community_manager', avatar: null },
-    { email: 'awadhesh@gameunity.com', username: 'awadhesh', firstName: 'Awadhesh', lastName: 'Kumar', password: 'Demo@123', role: 'user', avatar: null }
+    { id: 1, email: 'rajat@gameunity.com', username: 'rajat', firstName: 'Rajat', lastName: 'Jain', password: 'Rajat@123', role: 'admin', avatar: null },
+    { id: 2, email: 'karmanya@gameunity.com', username: 'karmanya', firstName: 'Karmanya', lastName: 'Bansal', password: 'Karmanya@123', role: 'moderator', avatar: null },
+    { id: 3, email: 'anant@gameunity.com', username: 'anant', firstName: 'Anant', lastName: 'Gupta', password: 'Demo@123', role: 'community_manager', avatar: null },
+    { id: 6, email: 'organizer@gameunity.com', username: 'org01', firstName: 'Priya', lastName: 'Verma', password: 'Demo@123', role: 'organizer', avatar: null },
+    { id: 4, email: 'awadhesh@gameunity.com', username: 'awadhesh', firstName: 'Awadhesh', lastName: 'Kumar', password: 'Demo@123', role: 'user', avatar: null },
+    { id: 5, email: 'sanidhya@gameunity.com', username: 'sanidhya', firstName: 'Sanidhya', lastName: 'Joshi', password: 'Demo@123', role: 'owner', avatar: null }
 ];
 
 /** * Persistent Mock Database Helpers 
@@ -165,10 +175,14 @@ window.handleLogin = function(e) {
         }
 
         localStorage.setItem('nexus_user', JSON.stringify({
+            id: matchedUser.id,
             firstName: matchedUser.firstName || (matchedUser.fullname || matchedUser.username).split(' ')[0] || matchedUser.username,
             lastName: matchedUser.lastName || (matchedUser.fullname || '').split(' ').slice(1).join(' '),
             name: matchedUser.fullname || `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim() || matchedUser.username,
             username: matchedUser.username,
+            email: matchedUser.email,
+            phone: matchedUser.phone,
+            bio: matchedUser.bio,
             role: matchedUser.role,
             avatar: matchedUser.avatar || null,
             loginTime: new Date().toISOString()
@@ -220,11 +234,12 @@ window.handleRegister = function(e) {
 
     setTimeout(async () => {
         const newUser = { username: handle, fullname, email, password, role };
+        let registeredUser = null;
         if (saveNewUser(newUser)) {
             try {
                 if (window.API?.auth) {
                     const nameParts = fullname.split(' ').filter(Boolean);
-                    await window.API.auth.register({
+                    registeredUser = await window.API.auth.register({
                         username: handle,
                         email,
                         password,
@@ -240,10 +255,12 @@ window.handleRegister = function(e) {
             // Auto-login
             const nameParts = fullname.split(' ').filter(Boolean);
             const user = {
+                id: registeredUser?.id,
                 firstName: nameParts[0] || '',
                 lastName: nameParts.slice(1).join(' '),
                 name: fullname,
                 username: handle,
+                email,
                 role,
                 avatar: null,
                 loginTime: new Date().toISOString()

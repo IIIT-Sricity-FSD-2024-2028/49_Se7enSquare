@@ -1,5 +1,5 @@
 /**
- * Se7enSquare - Community Settings
+ * Gameunity - Community Settings
  * Functional localStorage-backed settings for basic info, members, channels,
  * and simple roles.
  */
@@ -120,15 +120,40 @@ function renderHeader() {
   if (mark) mark.textContent = name.trim().charAt(0).toUpperCase() || "G";
 }
 
-function renderMembers() {
+async function renderMembers() {
   const list = document.getElementById("settingsMemberList");
   if (!list) return;
 
-  const members = currentCommunity.members.length
-    ? currentCommunity.members
-    : [
-        { name: "Community Owner", handle: "@owner", role: "Owner", initials: "CO", status: "Active" },
-      ];
+  list.innerHTML = `<div class="empty-state">Loading members…</div>`;
+
+  let members = [];
+  try {
+    const [memberships, users] = await Promise.all([
+      window.API.memberships.getAll({ communityId: currentCommunity.id }),
+      window.API.users.getAll(),
+    ]);
+    const usersById = new Map(users.map((u) => [String(u.id), u]));
+    members = memberships.map((m) => {
+      const user = usersById.get(String(m.userId));
+      const isOwner = user && String(user.id) === String(currentCommunity.ownerId);
+      return {
+        userId: m.userId,
+        name: user ? (user.username || user.email) : `User #${m.userId}`,
+        handle: user ? `@${user.username}` : "",
+        role: isOwner ? "Owner" : "Member",
+        initials: initialsFromName(user?.username || `U${m.userId}`),
+        status: "Active",
+      };
+    });
+  } catch (err) {
+    console.warn("[CommunitySettings] Could not load real members, showing local fallback:", err.message);
+    members = currentCommunity.members.length ? currentCommunity.members : [];
+  }
+
+  if (!members.length) {
+    list.innerHTML = `<div class="empty-state">No members yet.</div>`;
+    return;
+  }
 
   list.innerHTML = members.map((member) => `
     <div class="member-item">
@@ -137,9 +162,14 @@ function renderMembers() {
         <div class="member-name">${member.name || "Member"} <span class="muted-inline">${member.handle || ""}</span></div>
         <div class="member-date">${member.role || "Member"} &middot; ${member.status || "Active"}</div>
       </div>
+      ${member.userId ? `<button class="btn-sm danger" onclick="reportMember(${member.userId})">Report</button>` : ""}
     </div>
   `).join("");
 }
+
+window.reportMember = function (userId) {
+  window.location.href = `report.html?targetType=user&targetId=${encodeURIComponent(userId)}`;
+};
 
 function renderChannels() {
   const list = document.getElementById("settingsChannelList");
@@ -168,6 +198,8 @@ function renderChannels() {
 function renderCommunity() {
   document.getElementById("communityName").value = currentCommunity.name;
   document.getElementById("communityDesc").value = currentCommunity.description;
+  const rulesEl = document.getElementById("communityRules");
+  if (rulesEl) rulesEl.value = (currentCommunity.rules || []).join("\n");
   renderHeader();
   renderBanner();
   renderMembers();
@@ -175,20 +207,39 @@ function renderCommunity() {
   setDirty(false);
 }
 
-function loadCommunity() {
+// Was localStorage-first (only ever reading a stale/fake seeded cache), so a
+// real community created via the backend never actually showed its real
+// data here — settings looked "limited", and Insights had no real ownerId
+// to look up a plan with. The backend record is now the source of truth;
+// localStorage is only a fallback when it's unreachable.
+async function loadCommunity() {
   const id = getCommunityId();
   communities = loadCommunitiesFromStorage();
-  currentCommunity = communities.find((community) => normalizeId(community.id) === normalizeId(id));
 
-  if (!currentCommunity) {
-    currentCommunity = normalizeCommunity({
-      ...defaultCommunities[0],
-      id,
-      name: "New Community",
-      description: "Describe what this community is about.",
-    });
-    communities.push(currentCommunity);
-    persistCommunities();
+  let backendCommunity = null;
+  if (window.API && window.API.communities) {
+    try {
+      backendCommunity = await window.API.communities.getOne(id);
+    } catch (err) {
+      console.warn("[CommunitySettings] Could not load community from backend, using local cache:", err.message);
+    }
+  }
+
+  if (backendCommunity) {
+    currentCommunity = normalizeCommunity(backendCommunity);
+  } else {
+    currentCommunity = communities.find((community) => normalizeId(community.id) === normalizeId(id));
+
+    if (!currentCommunity) {
+      currentCommunity = normalizeCommunity({
+        ...defaultCommunities[0],
+        id,
+        name: "New Community",
+        description: "Describe what this community is about.",
+      });
+      communities.push(currentCommunity);
+      persistCommunities();
+    }
   }
 
   savedSnapshot = JSON.parse(JSON.stringify(currentCommunity));
@@ -220,21 +271,38 @@ function saveCommunitySettings() {
   currentCommunity.name = name;
   currentCommunity.description = description;
 
+  const rulesEl = document.getElementById("communityRules");
+  currentCommunity.rules = rulesEl
+    ? rulesEl.value.split("\n").map((line) => line.trim()).filter(Boolean)
+    : currentCommunity.rules;
+
   communities = communities.map((community) =>
     normalizeId(community.id) === normalizeId(currentCommunity.id) ? currentCommunity : community
   );
 
   persistCommunities();
-  
-  // Sync to Backend if API is available
+
+  // Sync to backend — awaited (not fire-and-forget) so a real rejection
+  // (e.g. the channel-count plan limit) surfaces as an error instead of the
+  // UI claiming success while the backend silently kept the old data.
   if (window.API && window.API.communities && window.API.communities.update) {
     window.API.communities.update(currentCommunity.id, {
         name: currentCommunity.name,
         description: currentCommunity.description,
         channels: currentCommunity.channels,
+        rules: currentCommunity.rules,
         banner: currentCommunity.banner,
         bannerImage: currentCommunity.bannerImage
-    }).catch(err => console.warn('Failed to sync settings to API:', err));
+    }).then(() => {
+        savedSnapshot = JSON.parse(JSON.stringify(currentCommunity));
+        renderHeader();
+        setDirty(false);
+        toast("Community updated successfully");
+    }).catch(err => {
+        console.warn('Failed to sync settings to API:', err);
+        toast("⚠️ Could not save: " + err.message);
+    });
+    return;
   }
 
   savedSnapshot = JSON.parse(JSON.stringify(currentCommunity));
@@ -243,19 +311,27 @@ function saveCommunitySettings() {
   toast("Community updated successfully");
 }
 
-function uploadBanner(event) {
+async function uploadBanner(event) {
   const file = event.target.files[0];
   if (!file || !currentCommunity) return;
 
-  const reader = new FileReader();
-  reader.onload = function () {
-    currentCommunity.bannerImage = reader.result;
-    currentCommunity.banner = reader.result;
+  if (!window.API || !window.API.uploads) {
+    toast("Upload service unavailable");
+    return;
+  }
+
+  try {
+    const result = await window.API.uploads.upload(file);
+    currentCommunity.bannerImage = result.absoluteUrl;
+    currentCommunity.banner = result.absoluteUrl;
     renderBanner();
     setDirty(true);
-  };
-
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.warn('Banner upload failed:', err);
+    toast("Failed to upload banner. Please try again.");
+  } finally {
+    event.target.value = '';
+  }
 }
 
 function initialsFromName(name = "") {
@@ -287,7 +363,40 @@ function activateSettingsTab(targetId, navEl) {
 window.switchSettingsTab = function (tabId, navEl) {
   const tabButton = navEl || document.querySelector(`[data-settings-tab="${tabId}"]`);
   activateSettingsTab(`settings-${tabId}`, tabButton);
+  if (tabId === 'insights') loadInsightsTab();
 };
+
+// Community Boost is an Ultra Pro perk (doc §8/§17) — gated on the community
+// OWNER's subscription plan, not the viewing user's.
+async function loadInsightsTab() {
+  if (!currentCommunity) return;
+
+  const memberEl = document.getElementById('insMemberCount');
+  const channelEl = document.getElementById('insChannelCount');
+  const onlineEl = document.getElementById('insOnlineCount');
+  if (memberEl) memberEl.textContent = currentCommunity.memberCount ?? (currentCommunity.members?.length || 0);
+  if (channelEl) channelEl.textContent = (currentCommunity.channels || []).length;
+  if (onlineEl) onlineEl.textContent = currentCommunity.onlineCount ?? 0;
+
+  const statusEl = document.getElementById('insBoostStatus');
+  const featuresEl = document.getElementById('insBoostFeatures');
+  if (!statusEl || !window.API) return;
+
+  try {
+    const sub = await window.API.subscriptions.status(currentCommunity.ownerId);
+    if (sub.plan === 'ultra_pro') {
+      statusEl.textContent = "🚀 Boosted — this community's owner is on Ultra Pro.";
+      featuresEl.innerHTML = ['Animated community icon', 'Priority discovery placement', 'Custom invite link', 'Event countdown widget', 'Larger upload limit']
+        .map(f => `<div>✓ ${f}</div>`).join('');
+    } else {
+      statusEl.textContent = 'Not boosted — the community owner is on the Free or Plus plan.';
+      featuresEl.innerHTML = `<div>Upgrading the owner's account to Ultra Pro unlocks: animated icon, priority discovery, custom invite link, event countdown widget, larger uploads.</div>`;
+    }
+  } catch (err) {
+    console.error('[CommunitySettings] Could not load boost status:', err.message);
+    statusEl.textContent = '⚠️ Could not reach the backend.';
+  }
+}
 
 window.goToCommunity = function () {
   const id = getCommunityId();
@@ -316,7 +425,7 @@ window.toast = function (msg) {
   setTimeout(() => toastEl.classList.remove("show"), 2400);
 };
 
-window.submitCreateChannel = function () {
+window.submitCreateChannel = async function () {
   const nameInput = document.getElementById("chNameInput");
   const typeInput = document.getElementById("chTypeInput");
   const rawName = nameInput?.value.trim();
@@ -333,25 +442,47 @@ window.submitCreateChannel = function () {
     return;
   }
 
-  currentCommunity.channels.push({
-    id: String(Date.now()),
-    name: normalizedName,
-    type: typeInput?.value || "Text",
-  });
+  const nextChannels = [
+    ...currentCommunity.channels,
+    { id: String(Date.now()), name: normalizedName, type: typeInput?.value || "Text" },
+  ];
 
+  // Save immediately — the modal says "added", so it should actually be
+  // persisted right away rather than waiting for a separate "Save Changes"
+  // click the user may not realize is still needed.
+  if (window.API?.communities && currentCommunity.id) {
+    try {
+      await window.API.communities.update(currentCommunity.id, { channels: nextChannels });
+    } catch (err) {
+      toast("⚠️ Could not create channel: " + err.message);
+      return;
+    }
+  }
+
+  currentCommunity.channels = nextChannels;
   renderChannels();
   closeModal("modalBg");
   if (nameInput) nameInput.value = "";
-  setDirty(true);
-  toast(`Channel #${normalizedName} added`);
+  toast(`✅ Channel #${normalizedName} created`);
 };
 
-window.deleteChannel = function (channelId) {
-  currentCommunity.channels = currentCommunity.channels.filter(
+window.deleteChannel = async function (channelId) {
+  const nextChannels = currentCommunity.channels.filter(
     (channel) => normalizeId(channel.id) !== normalizeId(channelId)
   );
+
+  if (window.API?.communities && currentCommunity.id) {
+    try {
+      await window.API.communities.update(currentCommunity.id, { channels: nextChannels });
+    } catch (err) {
+      toast("⚠️ Could not delete channel: " + err.message);
+      return;
+    }
+  }
+
+  currentCommunity.channels = nextChannels;
   renderChannels();
-  setDirty(true);
+  toast("Channel deleted");
 };
 
 window.discardSettings = function () {
@@ -370,9 +501,9 @@ window.uploadBanner = uploadBanner;
 window.handleBannerUpload = uploadBanner;
 window.loadCommunity = loadCommunity;
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   if (typeof renderUserUI === "function") renderUserUI();
-  loadCommunity();
+  await loadCommunity(); // must finish before the ownership check below reads currentCommunity
 
   const user = typeof getCurrentUser === 'function' ? getCurrentUser() : {};
   const ownedIds = JSON.parse(localStorage.getItem('nexus_owned_community_ids') || '[]');

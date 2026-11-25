@@ -307,131 +307,16 @@
             <input oninput="filterMembers(this.value)" placeholder="Search members…" type="text">
           </div>
           <div class="members-groups" id="membersContainer">
-            <div>
-              <div class="member-group-title">👑 Owner — 1</div>
-              <div class="member-grid">
-                <div class="member-card">
-                  <div class="m-avatar grad-gold user-avatar">
-                    <div class="m-status bg-dot-green"></div>
-                  </div>
-                  <div class="m-name">Rahul Kumar</div>
-                  <span class="m-role role-owner">Owner</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="member-group-title">🛡 Moderators — 4</div>
-              <div class="member-grid" id="modGrid">
-                <div class="member-card">
-                  <div class="m-avatar grad-purple">
-                    AK
-                    <div class="m-status bg-dot-green"></div>
-                  </div>
-                  <div class="m-name">Arjun Kumar</div>
-                  <span class="m-role role-moderator">Moderator</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="member-group-title">🟢 Online — 8</div>
-              <div class="member-grid">
-                <div class="member-card">
-                  <div class="m-avatar grad-violet user-avatar">
-                    <div class="m-status bg-dot-green"></div>
-                  </div>
-                  <div class="m-name">Rahul Kumar</div>
-                  <span class="m-role role-member">Member</span>
-                </div>
-                <div class="member-card">
-                  <div class="m-avatar grad-cyan">
-                    AK
-                    <div class="m-status bg-dot-green"></div>
-                  </div>
-                  <div class="m-name">Arjun Kumar</div>
-                  <span class="m-role role-member">Member</span>
-                </div>
-              </div>
-            </div>
+            <div class="empty-state" style="padding:20px;color:var(--text-muted);font-size:13px;">Loading members…</div>
           </div>
         </div>
       </div>
       <!-- ── RULES TAB ── -->
       <div class="tab-content" id="tab-rules">
         <div class="rules-layout">
-          <div class="rules-main">
-            <div class="rule-card">
-              <div class="rule-num">1</div>
-              <div class="rule-body">
-                <div class="rule-title">Be Respectful</div>
-                <div class="rule-desc">
-                  Treat every member with kindness and respect. Personal
-                  attacks, harassment, hate speech, and discriminatory language
-                  of any kind are strictly prohibited.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">2</div>
-              <div class="rule-body">
-                <div class="rule-title">Stay On Topic</div>
-                <div class="rule-desc">
-                  Keep discussions relevant to each channel's purpose. Use
-                  #off-topic for casual conversations not related to
-                  development.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">3</div>
-              <div class="rule-body">
-                <div class="rule-title">No Spam or Self-Promotion</div>
-                <div class="rule-desc">
-                  Unsolicited advertisements, excessive self-promotion, and
-                  repetitive posting are not allowed. Use #job-board for
-                  professional opportunities.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">4</div>
-              <div class="rule-body">
-                <div class="rule-title">Share Knowledge Generously</div>
-                <div class="rule-desc">
-                  When answering questions, be thorough and patient. We were all
-                  beginners once. Encourage learning at every level.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">5</div>
-              <div class="rule-body">
-                <div class="rule-title">Credit Original Work</div>
-                <div class="rule-desc">
-                  Always credit the original author when sharing code, articles,
-                  or other content. Do not claim others' work as your own.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">6</div>
-              <div class="rule-body">
-                <div class="rule-title">No Piracy or Illegal Content</div>
-                <div class="rule-desc">
-                  Sharing pirated software, cracked licenses, or any illegal
-                  content is grounds for immediate permanent ban.
-                </div>
-              </div>
-            </div>
-            <div class="rule-card">
-              <div class="rule-num">7</div>
-              <div class="rule-body">
-                <div class="rule-title">Listen to Moderators</div>
-                <div class="rule-desc">
-                  Moderator decisions are final. If you disagree with an action,
-                  use the appeal process rather than arguing in public channels.
-                </div>
-              </div>
-            </div>
+          <div class="rules-main" id="rulesMain">
+            <!-- Rendered dynamically by community-page.js's renderRules() — real rules the owner set via
+                 community-settings.html, or generic defaults when none are set -->
           </div>
           <div class="rules-aside">
             <div class="rules-note">
@@ -464,7 +349,7 @@
                 Use the report button on any message or contact a moderator
                 directly.
               </div>
-              <button class="report-btn" onclick="window.location.href = 'report.html'">
+              <button class="report-btn" onclick="reportThisCommunity()">
                 🚩 Report an Issue
               </button>
             </div>
@@ -473,58 +358,7 @@
       </div>
     </div>
     <script src="../js/core/auth.js"></script>
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        if (window.renderUserUI) window.renderUserUI();
-
-        // Show/hide Manage & Delete buttons based on ownership and admin role
-        const userObj = window.getCurrentUser ? window.getCurrentUser() : null;
-        const manageBtn = document.getElementById("rbacManageBtn");
-        const deleteBtn = document.getElementById("rbacDeleteBtn");
-
-        if (userObj) {
-          const params = new URLSearchParams(window.location.search);
-          const communityId = params.get("id") || params.get("name") || "pro-gamers";
-          const communityName = params.get("name") || communityId;
-          const isOwner = window.isOwnerOfCommunity
-            ? window.isOwnerOfCommunity(communityName)
-            : false;
-          const isAdmin = userObj.role === "admin";
-
-          if (manageBtn && (isOwner || isAdmin)) {
-            manageBtn.classList.remove("hidden");
-            manageBtn.href = `community-settings.html?id=${encodeURIComponent(communityId)}`;
-          }
-          if (deleteBtn && (isOwner || isAdmin)) {
-            deleteBtn.classList.remove("hidden");
-          }
-        }
-      });
-
-      function requestDeleteCommunity() {
-        const conf = confirm(
-          "Are you sure you want to permanently delete this community? This action cannot be undone.",
-        );
-        if (conf) {
-          const params = new URLSearchParams(window.location.search);
-          const communityName = params.get("id") || params.get("name") || "pro-gamers";
-
-          // C4 FIX: auth.js stores owned communities as an ARRAY, not an object
-          let owned = JSON.parse(
-            localStorage.getItem("nexus_owned_communities") || "[]",
-          );
-          owned = owned.filter(c => c !== communityName);
-          localStorage.setItem(
-            "nexus_owned_communities",
-            JSON.stringify(owned),
-          );
-
-          alert("Community has been successfully deleted.");
-          window.location.href = "dashboard.html";
-        }
-      }
-    </script>
-
+    <script src="../js/core/utils.js"></script>
     <script src="../js/core/apiClient.js"></script>
     <script src="../js/pages/community-page.js"></script>
     <script src="../js/components/notifications.js"></script>
