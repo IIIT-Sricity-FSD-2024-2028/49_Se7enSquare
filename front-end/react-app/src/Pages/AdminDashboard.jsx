@@ -92,12 +92,16 @@ export default function AdminDashboard() {
 
   const {
     users,
+    filteredUsers,
     userSearch,
     setUserSearch,
     userRoleFilter,
     setUserRoleFilter,
-    changeUserRole,
+    editingUser,
+    setEditingUser,
+    updateUserRole,
     suspendUser,
+    banUser,
     reinstateUser,
   } = useAdminUsers(notify);
 
@@ -116,14 +120,16 @@ export default function AdminDashboard() {
   } = useAdminModeration(notify);
 
   const counts = useAppSelector(selectAdminStats);
+  const currentPage = PAGES.find((page) => page.id === activePage) || PAGES[0];
 
   return (
     <AppShell activePage={activePage} onSelectPage={handleSelectPage}>
       <div className="main">
         <AdminHeader
+          currentPage={currentPage}
           adminUser={adminUser}
           globalSearch={globalSearch}
-          onGlobalSearchChange={setGlobalSearch}
+          setGlobalSearch={setGlobalSearch}
         />
 
         <AdminNav
@@ -135,34 +141,35 @@ export default function AdminDashboard() {
 
         {activePage === 'overview' && (
           <OverviewTab
-            counts={counts}
-            reports={reports}
-            appeals={appeals}
-            events={events}
-            communities={communities}
-            users={users}
-            onSelectPage={handleSelectPage}
+            stats={counts}
+            auditLog={auditLog}
+            onNavigate={handleSelectPage}
           />
         )}
 
         {activePage === 'users' && (
           <UsersTab
-            users={users}
+            filteredUsers={filteredUsers}
             userSearch={userSearch}
             setUserSearch={setUserSearch}
             userRoleFilter={userRoleFilter}
             setUserRoleFilter={setUserRoleFilter}
-            onChangeRole={changeUserRole}
-            onSuspendUser={suspendUser}
-            onReinstateUser={reinstateUser}
+            editingUser={editingUser}
+            setEditingUser={setEditingUser}
+            updateUserRole={updateUserRole}
+            suspendUser={suspendUser}
+            banUser={banUser}
+            reinstateUser={reinstateUser}
+            adminUser={adminUser}
           />
         )}
 
         {activePage === 'communities' && (
           <CommunitiesTab
             communities={communities}
-            onSuspend={suspendCommunity}
-            onReinstate={reinstateCommunity}
+            users={users}
+            suspendCommunity={suspendCommunity}
+            reinstateCommunity={reinstateCommunity}
           />
         )}
 
@@ -175,24 +182,24 @@ export default function AdminDashboard() {
           />
         )}
 
-        {activePage === 'events' && (
-          <EventsTab events={events} communities={communities} showToast={notify} />
+        {activePage === 'events-mgmt' && (
+          <EventsTab events={events} />
         )}
 
         {activePage === 'appeals' && (
-          <AppealsTab appeals={appeals} onResolve={handleAppeal} />
+          <AppealsTab appeals={appeals} onAppeal={handleAppeal} />
         )}
 
         {activePage === 'applications' && (
           <ApplicationsTab
             organizerApps={organizerApps}
             moderatorApps={moderatorApps}
-            onOrganizerAction={handleOrganizerApp}
-            onModeratorAction={handleModeratorApp}
+            onOrganizerApp={handleOrganizerApp}
+            onModeratorApp={handleModeratorApp}
           />
         )}
 
-        {activePage === 'audit-log' && <AuditLogTab auditLog={auditLog} />}
+        {activePage === 'audit' && <AuditLogTab auditLog={auditLog} />}
       </div>
     </AppShell>
   );
