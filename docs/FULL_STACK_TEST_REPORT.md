@@ -103,5 +103,6 @@ Reviewable implementation commits:
 - `5be5733` — verified session identity and protected mutations
 - `e416704` — cookie session restore and logout in the frontend
 - `0ea6565` — compatible frontend dependency security updates
+- `fd2de4e` — RBAC and full-stack test report
 
-The pull request URL will be added here after the branch is published.
+The branch was pushed to the authorized organization repository. Pull request: [#5 — Full-Stack Security and Regression Fixes](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/5). It targets `main` and remains open for review; it was not merged automatically.
