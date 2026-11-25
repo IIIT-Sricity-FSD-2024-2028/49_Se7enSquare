@@ -707,7 +707,7 @@
       "delete": {
         "operationId": "CommunitiesController_remove",
         "summary": "Delete a community",
-        "description": "Permanently deletes a community and cascades to related memberships and events. Same trust model as create/update — any authenticated role may call this; the frontend is responsible for only showing the Delete action to the community owner or an admin, since there is no per-request user identity to enforce it server-side.",
+        "description": "Permanently deletes a community and related records. Only its owner or an administrator may delete it.",
         "parameters": [
           {
             "name": "x-role",
@@ -2111,6 +2111,20 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
