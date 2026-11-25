@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
-import { selectCurrentUser, logout } from '../store/slices/authSlice';
+import { selectCurrentUser, logoutUser } from '../store/slices/authSlice';
 import { selectSidebarCollapsed, sidebarToggled, setSidebarMobileOpen } from '../store/slices/uiSlice';
 import { getHomeRoute } from '../services/roleAccess';
 import '../styles/sidebar.css';
@@ -274,7 +274,7 @@ export default function SideBar() {
           <button
             className="sb-profile__logout"
             onClick={() => {
-              dispatch(logout());
+              dispatch(logoutUser());
               navigate('/login');
             }}
             aria-label="Log out"

@@ -20,14 +20,14 @@ import { toastShown } from '../../../store/slices/uiSlice';
 import { initiateGoogleSignIn } from '../../../services/googleAuth';
 import { getHomeRoute } from '../../../services/roleAccess';
 
-export const PERSONAS = [
+export const PERSONAS = import.meta.env.DEV ? [
   { name: 'ADMIN (admin01)', username: 'admin01', role: 'admin', icon: '🛡️', pass: 'Demo@123' },
   { name: 'MOD (mod01)', username: 'mod01', role: 'moderator', icon: '🔍', pass: 'Demo@123' },
   { name: 'CM (cm01)', username: 'cm01', role: 'community_manager', icon: '📅', pass: 'Demo@123' },
   { name: 'ORGANIZER (org01)', username: 'org01', role: 'organizer', icon: '🏆', pass: 'Demo@123' },
   { name: 'PLAYER (player01)', username: 'player01', role: 'user', icon: '🎮', pass: 'Demo@123' },
   { name: 'OWNER (sanidhya)', username: 'sanidhya', role: 'owner', icon: '👑', pass: 'Demo@123' },
-];
+] : [];
 
 /**
  * Custom hook managing authentication, validation, state, and submissions for the Login/Register page.

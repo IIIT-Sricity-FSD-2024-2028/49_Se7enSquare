@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { toSessionUser } from '../../services/api';
+import { API_BASE, apiRequest, toSessionUser } from '../../services/api';
 import { authService } from '../../services/authService';
 
 /**
@@ -31,6 +31,17 @@ export const loginUser = createAsyncThunk(
     condition: (_, { getState }) => {
       const { loginLoading } = getState().auth;
       if (loginLoading) return false;
+    },
+  }
+);
+
+export const restoreSession = createAsyncThunk(
+  'auth/restoreSession',
+  async () => toSessionUser(await apiRequest('/users/me')),
+  {
+    condition: (_, { getState }) => {
+      const auth = getState().auth;
+      return !auth.sessionChecked && !auth.sessionLoading;
     },
   }
 );
@@ -72,6 +83,8 @@ const initialForm = {
 
 const initialState = {
   user: null,
+  sessionChecked: false,
+  sessionLoading: false,
   form: initialForm,
   loginLoading: false,
   loginError: null,
@@ -83,6 +96,8 @@ const initialState = {
 const setSessionUser = {
   reducer(state, action) {
     state.user = action.payload;
+    state.sessionChecked = true;
+    state.sessionLoading = false;
     state.loginLoading = false;
     state.loginError = null;
   },
@@ -90,6 +105,21 @@ const setSessionUser = {
     return { payload: toSessionUser(user) };
   },
 };
+
+export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { getState, dispatch }) => {
+  const token = getState().auth.user?.accessToken;
+  dispatch(logout());
+
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    // Always complete local logout, including when the backend is unreachable.
+  }
+});
 
 const authSlice = createSlice({
   name: 'auth',
@@ -102,9 +132,20 @@ const authSlice = createSlice({
       state.form = initialForm;
     },
     loginSuccess: setSessionUser,
-    profileUpdated: setSessionUser,
+    profileUpdated(state, action) {
+      const updated = toSessionUser(action.payload);
+      state.user = {
+        ...state.user,
+        ...updated,
+        accessToken: updated?.accessToken || state.user?.accessToken,
+      };
+      state.sessionChecked = true;
+      state.sessionLoading = false;
+    },
     logout(state) {
       state.user = null;
+      state.sessionChecked = true;
+      state.sessionLoading = false;
       state.loginLoading = false;
       state.loginError = null;
       state.regLoading = false;
@@ -136,6 +177,8 @@ const authSlice = createSlice({
         state.loginLoading = false;
         state.loginError = null;
         state.user = action.payload;
+        state.sessionChecked = true;
+        state.sessionLoading = false;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loginLoading = false;
@@ -153,6 +196,19 @@ const authSlice = createSlice({
       .addCase(registerUser.rejected, (state, action) => {
         state.regLoading = false;
         state.regError = action.payload || { general: action.error?.message || 'Registration failed' };
+      })
+      .addCase(restoreSession.pending, (state) => {
+        state.sessionLoading = true;
+      })
+      .addCase(restoreSession.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.sessionLoading = false;
+        state.sessionChecked = true;
+      })
+      .addCase(restoreSession.rejected, (state) => {
+        state.user = null;
+        state.sessionLoading = false;
+        state.sessionChecked = true;
       });
   },
 });

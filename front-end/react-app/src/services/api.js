@@ -39,6 +39,7 @@ export function toSessionUser(user) {
     lastName: user.lastName || '',
     avatar: user.avatar || null,
     status: user.status || 'active',
+    ...(typeof user.accessToken === 'string' ? { accessToken: user.accessToken } : {}),
   };
 }
 
@@ -57,7 +58,6 @@ export function handleRoleMismatch(data) {
  */
 export async function apiRequest(endpoint, options = {}) {
   const user = getStoredUser();
-  const role = user?.role || 'user';
 
   const url = endpoint.startsWith('http')
     ? endpoint
@@ -65,8 +65,9 @@ export async function apiRequest(endpoint, options = {}) {
 
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-    'x-role': role,
+    ...(user?.role ? { 'x-role': user.role } : {}),
     ...(user?.id !== undefined && user?.id !== null ? { 'x-user-id': String(user.id) } : {}),
+    ...(user?.accessToken ? { Authorization: `Bearer ${user.accessToken}` } : {}),
     ...(options.headers || {}),
   };
 
@@ -74,6 +75,7 @@ export async function apiRequest(endpoint, options = {}) {
   try {
     response = await fetch(url, {
       ...options,
+      credentials: 'include',
       headers,
     });
   } catch (netErr) {
