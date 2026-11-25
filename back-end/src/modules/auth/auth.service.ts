@@ -5,6 +5,9 @@ import { sanitizeUser, SanitizedUser } from '../../common/utils/sanitize-user';
 import { AppRole } from '../rbac/role.enum';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { createAuthSession, getAuthSession, revokeAuthSession, revokeUserSessions } from '../../common/utils/auth-sessions';
+
+type AuthenticatedUser = SanitizedUser & { accessToken: string };
 
 interface RegisterPayload {
   username: string;
@@ -35,7 +38,7 @@ interface VerifiedGoogleProfile {
 export class AuthService {
   private readonly oauthClient = new OAuth2Client();
 
-  changePassword(userId: number, payload: ChangePasswordDto) {
+  changePassword(userId: number, payload: ChangePasswordDto): AuthenticatedUser & { hasPassword: true } {
     const user = db.users.find(u => u.id === userId);
     if (!user) throw new UnauthorizedException('Sign in to change your password');
     if (payload.new !== payload.confirm) throw new BadRequestException('confirm: passwords do not match');
@@ -47,8 +50,9 @@ export class AuthService {
     }
     user.passwordHash = hashPassword(payload.new);
     delete user.password;
+    revokeUserSessions(user.id);
     saveDb();
-    return { ...sanitizeUser(user), hasPassword: true };
+    return { ...this.authenticatedUser(user), hasPassword: true };
   }
 
   register(payload: RegisterPayload): SanitizedUser {
@@ -80,7 +84,7 @@ export class AuthService {
     return sanitizeUser(created);
   }
 
-  login(payload: LoginPayload): SanitizedUser {
+  login(payload: LoginPayload): AuthenticatedUser {
     const login = payload.login.toLowerCase();
     const user = db.users.find(
       (item) => item.email.toLowerCase() === login || item.username.toLowerCase() === login,
@@ -110,7 +114,13 @@ export class AuthService {
       });
     }
 
-    return sanitizeUser(user);
+    return this.authenticatedUser(user);
+  }
+
+  logout(userId: number, token: string | null) {
+    // The guard has already authenticated this token; bind revocation to its owner.
+    if (token && getAuthSession(token) === userId) revokeAuthSession(token);
+    return { message: 'Signed out' };
   }
 
 
@@ -118,7 +128,7 @@ export class AuthService {
    * Securely validates Google OAuth credential / token on the backend
    * and links or auto-provisions a Se7enSquare user.
    */
-  async googleAuth(payload: GoogleAuthDto): Promise<UserRecord> {
+  async googleAuth(payload: GoogleAuthDto): Promise<AuthenticatedUser> {
     if (!payload.credential && !payload.accessToken) {
       throw new BadRequestException('Either Google credential (ID token) or accessToken is required');
     }
@@ -223,7 +233,7 @@ export class AuthService {
         existingUser.avatar = googleProfile.picture;
       }
       saveDb();
-      return sanitizeUser(existingUser);
+      return this.authenticatedUser(existingUser);
     }
 
     // Provision new user
@@ -253,6 +263,10 @@ export class AuthService {
 
     db.users.push(newUser);
     saveDb();
-    return sanitizeUser(newUser);
+    return this.authenticatedUser(newUser);
+  }
+
+  private authenticatedUser(user: UserRecord): AuthenticatedUser {
+    return { ...sanitizeUser(user), accessToken: createAuthSession(user.id) };
   }
 }

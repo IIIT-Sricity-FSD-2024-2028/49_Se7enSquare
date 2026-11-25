@@ -335,8 +335,13 @@ export const MIGRATIONS: MigrationFn[] = [
         if (!u.status) u.status = 'active';
         if (!u.createdAt) u.createdAt = '2026-01-01T00:00:00.000Z';
         if (!u.privacy) u.privacy = { showActivity: true, allowDMs: true };
-        if (!u.passwordHash && u.authProvider !== 'google') {
+        if (!u.passwordHash && u.authProvider !== 'google' && process.env.NODE_ENV !== 'production') {
           u.passwordHash = hashPassword(u.password || 'Demo@123');
+        }
+        // Never preserve the public demo password when production loads a
+        // database created earlier in development.
+        if (process.env.NODE_ENV === 'production' && u.passwordHash && verifyPassword('Demo@123', u.passwordHash)) {
+          delete u.passwordHash;
         }
         delete u.password;
       });
