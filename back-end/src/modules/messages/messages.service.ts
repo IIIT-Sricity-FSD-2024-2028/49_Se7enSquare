@@ -4,6 +4,14 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MessagesService {
+  remove(id: number, userId: number): { id: number } {
+    const index = db.messages.findIndex((item) => item.id === id && item.authorId === userId);
+    if (index === -1) throw new NotFoundException('No removable record found');
+    db.messages.splice(index, 1);
+    saveDb();
+    return { id };
+  }
+
   findAll(communityId?: number, channelId?: string): ChatMessageRecord[] {
     return db.messages.filter((item) =>
       (!communityId || item.communityId === communityId) &&

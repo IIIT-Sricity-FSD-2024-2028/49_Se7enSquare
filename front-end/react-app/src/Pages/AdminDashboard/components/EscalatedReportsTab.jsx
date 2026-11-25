@@ -1,184 +1,139 @@
-import React, { useState } from "react";
+import React from "react";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { modNoteChanged, selectModNotes } from "../../../store/slices/adminModerationSlice";
 
 /**
  * Escalated Reports tab - shows only reports with status === 'escalated',
  * enriched with reporter, target and community names.
+ * Notes state is managed in Redux adminModerationSlice.modNotes.
  */
 export default function EscalatedReportsTab({ reports, users, communities, onAction }) {
-  const [notes, setNotes] = useState({});
+  const dispatch = useAppDispatch();
+  const notes = useAppSelector(selectModNotes);
 
   const escalated = (reports || []).filter((r) => r.status === "escalated");
 
   function enrich(r) {
     const reporter = (users || []).find((u) => u.id === r.reporterId);
-    const target = (users || []).find((u) => u.id === r.targetId);
-    const community = (communities || []).find((c) => c.id === r.communityId);
-    return { ...r, reporter, target, community };
+    const target = (users || []).find((u) => u.id === r.reportedUserId);
+    const comm = (communities || []).find((c) => c.id === r.communityId);
+    return {
+      reporterName: reporter?.username || `User #${r.reporterId}`,
+      targetName: target?.username || `User #${r.reportedUserId}`,
+      communityName: comm?.name || (r.communityId ? `Community #${r.communityId}` : "General"),
+    };
   }
 
+  const setNote = (reportId, note) => {
+    dispatch(modNoteChanged({ reportId, note }));
+  };
+
   return (
-    <div className="admin-page active" id="page-escalated-reports">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+    <section className="admin-page active" id="page-escalated-reports">
+      <div className="section-header">
         <div>
-          <h3 style={{ margin: 0, fontFamily: "'Syne',sans-serif", color: "#fff" }}>
-            Escalated Reports Queue
-          </h3>
-          <div style={{ fontSize: "12px", color: "#8b949e", marginTop: "4px" }}>
-            Reports escalated by community moderators requiring administrator intervention
-          </div>
+          <h2>Escalated Reports Queue</h2>
+          <p className="section-sub">
+            Reports forwarded to admins by community moderators requiring platform-level action.
+          </p>
         </div>
-        <span className="admin-users-count-badge">
-          {escalated.length} {escalated.length === 1 ? "report" : "reports"} pending
-        </span>
       </div>
 
-      {escalated.length === 0 ? (
-        <div
-          className="admin-card-container"
-          style={{
-            textAlign: "center",
-            padding: "48px 20px",
-            color: "#8b949e",
-          }}
-        >
-          <div style={{ fontSize: "32px", marginBottom: "10px" }}>🛡️</div>
-          <div style={{ fontWeight: 600, color: "#fff", fontSize: "15px" }}>Queue is clean!</div>
-          <div style={{ fontSize: "13px", marginTop: "4px" }}>No escalated reports require administrative review at this time.</div>
-        </div>
-      ) : (
-        <div className="admin-card-list">
-          {escalated.map((raw) => {
-            const r = enrich(raw);
-            const note = notes[r.id] || "";
+      <div className="reports-grid">
+        {escalated.length === 0 ? (
+          <div className="empty-state" style={{ gridColumn: "1/-1" }}>
+            <div className="empty-icon">🛡️</div>
+            <p>No escalated reports pending admin review.</p>
+          </div>
+        ) : (
+          escalated.map((r) => {
+            const { reporterName, targetName, communityName } = enrich(r);
+            const note = notes[r.id] ?? "";
             return (
-              <div key={r.id} className="admin-esc-card">
-                {/* Header row */}
-                <div className="admin-esc-header">
-                  <span
-                    style={{
-                      padding: "4px 10px",
-                      background: "rgba(239, 68, 68, 0.15)",
-                      border: "1px solid rgba(239, 68, 68, 0.35)",
-                      borderRadius: "6px",
-                      color: "#f87171",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    ESCALATED
+              <div key={r.id} className="report-card escalated-card">
+                <div className="report-card-header">
+                  <span className="badge badge-escalated">Escalated</span>
+                  <span className="report-date">
+                    {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "Recently"}
                   </span>
-                  <span style={{ fontWeight: 600, color: "#fff", fontSize: "14px" }}>
-                    {r.reason}
-                  </span>
-                  {r.community && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        color: "#93c5fd",
-                        background: "rgba(59, 130, 246, 0.1)",
-                        padding: "2px 8px",
-                        borderRadius: "4px",
-                      }}
-                    >
-                      in {r.community.name}
-                    </span>
-                  )}
                 </div>
 
-                {/* Reporter & Target Metadata */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "20px",
-                    fontSize: "13px",
-                    color: "#8b949e",
-                    margin: "8px 0",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div className="report-parties">
                   <div>
-                    Reporter:{" "}
-                    <span style={{ color: "#e2e8f0", fontWeight: 600 }}>
-                      {r.reporter?.username ? "@" + r.reporter.username : "#" + r.reporterId}
-                    </span>
+                    <span className="report-label">Reported by:</span> <strong>{reporterName}</strong>
                   </div>
                   <div>
-                    Target:{" "}
-                    <span style={{ color: "#fca5a5", fontWeight: 600 }}>
-                      {r.target?.username ? "@" + r.target.username : "#" + r.targetId}
-                    </span>
+                    <span className="report-label">Target user:</span> <strong>{targetName}</strong>
+                  </div>
+                  <div>
+                    <span className="report-label">Community:</span> <span>{communityName}</span>
+                  </div>
+                  <div>
+                    <span className="report-label">Type:</span> <span>{r.itemType || "message"}</span>
                   </div>
                 </div>
 
-                {/* Content Snapshot */}
-                {r.contentSnapshot && (
-                  <div className="admin-esc-snapshot">
-                    "{r.contentSnapshot}"
+                <div className="report-reason">
+                  <div className="report-label">Violation Reason:</div>
+                  <p>{r.reason || "No reason given."}</p>
+                </div>
+
+                {r.escalationReason && (
+                  <div className="report-escalation-box">
+                    <span className="report-label">Moderator Escalation Note:</span>
+                    <p>{r.escalationReason}</p>
                   </div>
                 )}
 
-                {/* Actions & Resolution Note Bar */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginTop: "16px",
-                    paddingTop: "14px",
-                    borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div className="report-note-field">
+                  <label htmlFor={`note-${r.id}`}>Admin Resolution Note:</label>
                   <input
+                    id={`note-${r.id}`}
                     type="text"
-                    className="admin-esc-input"
-                    placeholder="Resolution note (required for Dismiss)..."
+                    className="admin-input"
+                    placeholder="Enter reason or context for action..."
                     value={note}
-                    onChange={(e) =>
-                      setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))
-                    }
+                    onChange={(e) => setNote(r.id, e.target.value)}
                   />
-                  <div className="admin-action-btn-group">
-                    <button
-                      className="admin-btn-action btn-secondary"
-                      onClick={() => onAction(r, "dismiss", note)}
-                      disabled={!note.trim()}
-                      title={!note.trim() ? "Please enter a resolution note" : "Dismiss report"}
-                    >
-                      Dismiss
-                    </button>
-                    <button
-                      className="admin-btn-action btn-warn"
-                      onClick={() => onAction(r, "warn", note)}
-                    >
-                      Warn
-                    </button>
-                    <button
-                      className="admin-btn-action btn-danger"
-                      onClick={() => onAction(r, "remove_content", note)}
-                    >
-                      Remove Content
-                    </button>
-                    <button
-                      className="admin-btn-action btn-danger"
-                      onClick={() => onAction(r, "suspend_author", note)}
-                    >
-                      Suspend Author
-                    </button>
-                    <button
-                      className="admin-btn-action btn-danger"
-                      onClick={() => onAction(r, "ban_author", note)}
-                    >
-                      Ban Author
-                    </button>
-                  </div>
+                </div>
+
+                <div className="report-actions">
+                  <button
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => onAction(r, "dismiss", note)}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    className="btn btn-sm btn-warning"
+                    onClick={() => onAction(r, "warn", note)}
+                  >
+                    Warn
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => onAction(r, "remove_content", note)}
+                  >
+                    Remove Content
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => onAction(r, "suspend_author", note)}
+                  >
+                    Suspend User
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => onAction(r, "ban_author", note)}
+                  >
+                    Ban User
+                  </button>
                 </div>
               </div>
             );
-          })}
-        </div>
-      )}
-    </div>
+          })
+        )}
+      </div>
+    </section>
   );
 }

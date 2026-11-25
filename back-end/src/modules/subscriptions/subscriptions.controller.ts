@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiHeader, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
@@ -35,6 +36,17 @@ export class SubscriptionsController {
   @ApiOkResponse({ type: SubscriptionDto })
   status(@Query('userId') userId: string) {
     return this.subscriptionsService.status(Number(userId));
+  }
+
+  @Post()
+  @Roles(...SUBSCRIBER_ROLES)
+  create(@CurrentUser('id') userId: number, @Body() payload: UpgradeSubscriptionDto) {
+    if (userId !== payload.userId) throw new ForbiddenException('You can only manage your own subscription');
+    const current = this.subscriptionsService.status(userId);
+    if (current.plan !== 'free' && current.plan !== payload.plan) {
+      throw new ConflictException('Change the active plan instead of creating a new subscription');
+    }
+    return this.subscriptionsService.upgrade(userId, payload.plan);
   }
 
   @Post('upgrade')

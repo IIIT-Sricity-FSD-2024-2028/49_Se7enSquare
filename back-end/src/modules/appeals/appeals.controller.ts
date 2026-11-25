@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { AppealsService } from './appeals.service';
@@ -29,6 +30,12 @@ export class AppealsController {
   @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER)
   addEvidence(@Param('id', ParseIntPipe) id: number, @Body() payload: AddAppealEvidenceDto) {
     return this.service.addEvidence(id, payload);
+  }
+
+  @Delete(':id')
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.service.remove(id, userId);
   }
 
   @Patch(':id/status')

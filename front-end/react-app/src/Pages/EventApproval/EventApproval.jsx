@@ -1,7 +1,7 @@
 // Page container component for the Event Approval Dashboard.
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import SideBar from '../../Components/SideBar';
 import '../../styles/global.css';
 import '../../styles/sidebar.css';
@@ -13,9 +13,12 @@ import { EVENT_STATUSES } from '../../Components/event-management/utils/constant
 import {
   fetchEvents,
   updateEventStatus,
+  openApprovalModal,
+  closeApprovalModal,
   selectEventsLoading,
-  selectEventsByStatus,
+  selectApprovalModalState,
 } from '../../store/slices/eventsSlice';
+import { selectEventsByStatus } from '../../store/selectors/eventSelectors';
 import { fetchCommunityList, selectAllCommunities } from '../../store/slices/communitiesSlice';
 
 import SummaryBar from './SummaryBar';
@@ -24,12 +27,11 @@ import EventDetailModal from './EventDetailModal';
 
 export default function EventApproval() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const loading = useSelector(selectEventsLoading);
-  const { pending: pendingList, approved: approvedList, rejected: rejectedList } = useSelector(selectEventsByStatus);
-  const communities = useSelector(selectAllCommunities);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector(selectEventsLoading);
+  const { pending: pendingList, approved: approvedList, rejected: rejectedList } = useAppSelector(selectEventsByStatus);
+  const communities = useAppSelector(selectAllCommunities);
+  const approvalModal = useAppSelector(selectApprovalModalState);
 
   const { showToast } = useToast();
 
@@ -38,29 +40,32 @@ export default function EventApproval() {
     dispatch(fetchCommunityList());
   }, [dispatch]);
 
-  // A backend refusal (e.g. "An approved event already exists ... at the selected
-  // date and time") is shown and nothing changes. If the backend cannot be reached,
-  // the slice keeps the local fallback and reports local: true.
-  const changeStatus = async (id, status, onlineMsg, offlineMsg) => {
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(closeApprovalModal());
+    };
+  }, [dispatch]);
+
+  const changeStatus = async (id, status, onlineMsg) => {
     try {
-      const { local } = await dispatch(updateEventStatus({ id, status })).unwrap();
-      showToast(local ? offlineMsg : onlineMsg);
+      await dispatch(updateEventStatus({ id, status })).unwrap();
+      showToast(onlineMsg);
     } catch (err) {
-      showToast(`⚠️ ${err.message}`);
+      showToast(`⚠️ ${err.message || 'Status update failed'}`);
     }
   };
 
   const handleApprove = (id) => changeStatus(
-    id, EVENT_STATUSES.APPROVED, '✅ Event approved — all users will now see it.', '✅ Event approved (locally).'
+    id, EVENT_STATUSES.APPROVED, '✅ Event approved — all users will now see it.'
   );
 
   const handleReject = (id) => changeStatus(
-    id, EVENT_STATUSES.REJECTED, '❌ Event rejected.', '❌ Event rejected (locally).'
+    id, EVENT_STATUSES.REJECTED, '❌ Event rejected.'
   );
 
   const openDetails = (ev) => {
-    setSelectedEvent(ev);
-    setModalOpen(true);
+    dispatch(openApprovalModal({ event: ev, action: 'view' }));
   };
 
   return (
@@ -118,12 +123,11 @@ export default function EventApproval() {
       </main>
 
       <EventDetailModal
-        event={selectedEvent}
-        isOpen={modalOpen && !!selectedEvent}
-        onClose={() => setModalOpen(false)}
-        communityName={selectedEvent ? getCommunityName(selectedEvent.communityId, communities) : ''}
+        event={approvalModal.event}
+        isOpen={approvalModal.open && !!approvalModal.event}
+        onClose={() => dispatch(closeApprovalModal())}
+        communityName={approvalModal.event ? getCommunityName(approvalModal.event.communityId, communities) : ''}
       />
-
     </div>
   );
 }

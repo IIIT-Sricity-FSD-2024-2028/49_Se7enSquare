@@ -21,6 +21,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AppRole } from '../rbac/role.enum';
@@ -30,6 +31,12 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserDto } from './dto/user.dto';
+
+class DeleteAccountDto {
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+}
 
 @ApiTags('users')
 @ApiHeader({
@@ -126,6 +133,11 @@ export class UsersController {
   @ApiCreatedResponse({ type: UserDto, description: 'The newly created user' })
   create(@Body() payload: CreateUserDto) {
     return this.usersService.create(payload);
+  }
+
+  @Delete('me')
+  removeMe(@CurrentUser() user: UserRecord, @Body() body: DeleteAccountDto) {
+    return this.usersService.removeMe(user, body.password);
   }
 
   @Delete(':id')

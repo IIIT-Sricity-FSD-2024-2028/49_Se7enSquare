@@ -1,14 +1,15 @@
 import { useCallback, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchAuditLog, selectAuditEntries } from '../../../store/slices/auditLogSlice';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { fetchAuditLog, resetAuditLogState } from '../../../store/slices/auditLogSlice';
+import { selectFilteredAuditLogs } from '../../../store/selectors/adminSelectors';
 
 /**
  * Custom hook reading the administrative audit log from the Redux auditLog slice.
- * New entries are written by the admin thunks themselves (addAuditEntry).
+ * Uses memoized Reselect selector and provides automatic unmount cleanup.
  */
 export default function useAuditLog() {
-  const dispatch = useDispatch();
-  const auditLog = useSelector(selectAuditEntries);
+  const dispatch = useAppDispatch();
+  const auditLog = useAppSelector(selectFilteredAuditLogs);
 
   const refreshAuditLog = useCallback(() => dispatch(fetchAuditLog()), [dispatch]);
 
@@ -17,5 +18,15 @@ export default function useAuditLog() {
     refreshAuditLog();
   }, [refreshAuditLog]);
 
-  return { auditLog, refreshAuditLog };
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(resetAuditLogState());
+    };
+  }, [dispatch]);
+
+  return {
+    auditLog,
+    refreshAuditLog,
+  };
 }

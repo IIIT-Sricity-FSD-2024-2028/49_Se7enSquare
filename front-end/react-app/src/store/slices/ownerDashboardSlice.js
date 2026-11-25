@@ -1,27 +1,28 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiRequest } from '../../services/api';
-import { dashboardService } from '../../services/dashboardService';
 import { DEFAULT_STATS, DEFAULT_REVENUE } from '../../Components/platform/data/ownerDashboardData';
 import { logout } from './authSlice';
 
 /**
- * Owner Dashboard slice (read-only view): platform stats, revenue, and the
- * drill-down modal that opens when a metric card is clicked.
+ * Owner Dashboard slice: executive stats, revenue KPIs, drill-down breakdown modal,
+ * subscription filter, and admin UI state.
  */
 
-const asArray = (data) => (Array.isArray(data) ? data : []);
+const asArray = (v) => (Array.isArray(v) ? v : []);
 
-// Stats and revenue load in parallel. If either call fails the backend is shown as unreachable.
 export const fetchOwnerOverview = createAsyncThunk('ownerDashboard/fetchOverview', async () => {
   const [statsRes, revenueRes] = await Promise.allSettled([
-    dashboardService.getStats(),
-    dashboardService.getRevenue(),
+    apiRequest('/dashboard/stats'),
+    apiRequest('/dashboard/revenue'),
   ]);
+
   const data = statsRes.status === 'fulfilled' ? statsRes.value : null;
   const rev = revenueRes.status === 'fulfilled' ? revenueRes.value : null;
 
   return {
     stats: data && {
+      totalUsers: data.totalUsers || 0,
+      totalMemberships: data.totalMemberships || 0,
       totalCommunities: data.totalCommunities || 0,
       allCommunitiesCount: data.allCommunitiesCount ?? data.totalCommunities ?? 0,
       suspendedCommunitiesCount: data.suspendedCommunitiesCount || 0,
@@ -55,10 +56,6 @@ function drillTitleOf(kind, filter) {
   return 'Details';
 }
 
-/**
- * Loads one drill-down breakdown. A failed request does not reject: the modal
- * shows the table empty with `loadError`, like the other admin tables.
- */
 export const openDrill = createAsyncThunk('ownerDashboard/openDrill', async ({ kind, filter }) => {
   try {
     if (kind === 'communities') {
@@ -98,6 +95,11 @@ const initialState = {
   stats: DEFAULT_STATS,
   revenue: DEFAULT_REVENUE,
   drill: { open: false, title: 'Details', loading: false, content: null, requestId: null },
+  subscriptionFilter: 'all',
+  adminUi: {
+    activePage: 'overview',
+    globalSearch: '',
+  },
 };
 
 const ownerDashboardSlice = createSlice({
@@ -106,6 +108,18 @@ const ownerDashboardSlice = createSlice({
   reducers: {
     drillClosed(state) {
       state.drill.open = false;
+    },
+    subscriptionFilterChanged(state, action) {
+      state.subscriptionFilter = action.payload;
+    },
+    adminUiActivePageChanged(state, action) {
+      state.adminUi.activePage = action.payload;
+    },
+    adminUiGlobalSearchChanged(state, action) {
+      state.adminUi.globalSearch = action.payload;
+    },
+    resetOwnerDashboardState() {
+      return initialState;
     },
   },
   extraReducers: (builder) => {
@@ -116,13 +130,11 @@ const ownerDashboardSlice = createSlice({
         if (revenue) state.revenue = revenue;
         state.stats.backendStatus = reachable ? 'Reachable' : '⚠️ Unreachable';
       })
-
       .addCase(openDrill.pending, (state, action) => {
         const { kind, filter } = action.meta.arg;
         state.drill.open = true;
         state.drill.loading = true;
         state.drill.title = drillTitleOf(kind, filter);
-        // Remember the latest request: a slower earlier one must not overwrite it
         state.drill.requestId = action.meta.requestId;
       })
       .addCase(openDrill.fulfilled, (state, action) => {
@@ -130,15 +142,22 @@ const ownerDashboardSlice = createSlice({
         state.drill.loading = false;
         state.drill.content = action.payload;
       })
-
       .addCase(logout, () => initialState);
   },
 });
 
-export const { drillClosed } = ownerDashboardSlice.actions;
+export const {
+  drillClosed,
+  subscriptionFilterChanged,
+  adminUiActivePageChanged,
+  adminUiGlobalSearchChanged,
+  resetOwnerDashboardState,
+} = ownerDashboardSlice.actions;
 
 export const selectOwnerStats = (state) => state.ownerDashboard.stats;
 export const selectOwnerRevenue = (state) => state.ownerDashboard.revenue;
 export const selectDrill = (state) => state.ownerDashboard.drill;
+export const selectSubscriptionFilter = (state) => state.ownerDashboard.subscriptionFilter;
+export const selectAdminUi = (state) => state.ownerDashboard.adminUi;
 
 export default ownerDashboardSlice.reducer;

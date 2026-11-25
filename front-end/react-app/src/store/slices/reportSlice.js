@@ -4,7 +4,7 @@ import { logout } from './authSlice';
 
 /**
  * Report slice: the 4-step report wizard.
- * Living in the store means a half-filled report survives leaving the page and coming back.
+ * The wizard clears its draft when the report page unmounts.
  */
 
 // GET /users?search= -> first 6 matches
@@ -36,10 +36,26 @@ export const submitReport = createAsyncThunk('report/submitReport', async (_, { 
     method: 'POST',
     body: JSON.stringify(reportData),
   });
-  return `RPT-${data.id}`;
+  return data;
+});
+
+export const fetchMyReports = createAsyncThunk('report/fetchMine', () => apiRequest('/reports/mine'));
+
+export const updateReportStatus = createAsyncThunk(
+  'report/updateStatus',
+  ({ id, ...update }) => apiRequest(`/reports/${id}/status`, {
+    method: 'PATCH', body: JSON.stringify(update),
+  }),
+);
+
+export const deleteReport = createAsyncThunk('report/delete', async (id) => {
+  await apiRequest(`/reports/${id}`, { method: 'DELETE' });
+  return id;
 });
 
 const initialState = {
+  myReports: [],
+  submissionRequestId: null,
   step: 1,
   selectedTarget: null,
   selectedReason: '',
@@ -58,10 +74,10 @@ const reportSlice = createSlice({
   reducers: {
     // A link like /report?user=7 starts a fresh report for that target
     reportStarted(state, action) {
-      return { ...initialState, selectedTarget: action.payload };
+      return { ...initialState, myReports: state.myReports, selectedTarget: action.payload };
     },
-    reportReset() {
-      return initialState;
+    resetReportForm(state) {
+      return { ...initialState, myReports: state.myReports };
     },
     stepChanged(state, action) {
       state.step = action.payload;
@@ -96,18 +112,34 @@ const reportSlice = createSlice({
           state.searchResults = [];
         }
       })
-      .addCase(submitReport.pending, (state) => {
+      .addCase(submitReport.pending, (state, action) => {
+        state.submissionRequestId = action.meta.requestId;
         state.submitting = true;
       })
       .addCase(submitReport.fulfilled, (state, action) => {
+        state.myReports.unshift(action.payload);
+        if (state.submissionRequestId !== action.meta.requestId) return;
+        state.submissionRequestId = null;
         // The success step only appears once the backend has saved the report
         state.submitting = false;
-        state.refId = action.payload;
+        state.refId = `RPT-${action.payload.id}`;
         state.step = 4;
         state.submitted = true;
       })
-      .addCase(submitReport.rejected, (state) => {
+      .addCase(submitReport.rejected, (state, action) => {
+        if (state.submissionRequestId !== action.meta.requestId) return;
+        state.submissionRequestId = null;
         state.submitting = false;
+      })
+      .addCase(fetchMyReports.fulfilled, (state, action) => {
+        state.myReports = action.payload;
+      })
+      .addCase(updateReportStatus.fulfilled, (state, action) => {
+        const index = state.myReports.findIndex(({ id }) => id === action.payload.id);
+        if (index !== -1) state.myReports[index] = action.payload;
+      })
+      .addCase(deleteReport.fulfilled, (state, action) => {
+        state.myReports = state.myReports.filter(({ id }) => id !== action.payload);
       })
       .addCase(logout, () => initialState);
   },
@@ -115,7 +147,7 @@ const reportSlice = createSlice({
 
 export const {
   reportStarted,
-  reportReset,
+  resetReportForm,
   stepChanged,
   targetSelected,
   reasonSelected,
@@ -123,6 +155,8 @@ export const {
   confirmedChanged,
   userSearchChanged,
 } = reportSlice.actions;
+
+export const reportReset = resetReportForm;
 
 export const selectReport = (state) => state.report;
 

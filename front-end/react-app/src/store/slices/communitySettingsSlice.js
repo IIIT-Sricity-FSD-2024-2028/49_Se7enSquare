@@ -5,98 +5,142 @@ import { logout } from './authSlice';
 
 /**
  * Community Settings slice: the community being edited (a draft), a snapshot
- * of what the server has (for Discard), and the dirty flag (for the Save bar).
+ * of what the server has (for Discard), active tab, modal state, and channel creation form.
+ *
+ * CRUD operations:
+ * - Read:   fetchCommunitySettings (GET /api/communities/:id)
+ * - Update: saveCommunitySettings  (PATCH /api/communities/:id)
+ *           uploadBanner           (POST /api/uploads)
+ *           createChannel          (PATCH /api/communities/:id)
+ * - Delete: removeMember           (DELETE /api/memberships/:id)
  */
 
 // Loads the community, its memberships and users in parallel and shapes them for the form
 export const fetchCommunitySettings = createAsyncThunk(
   'communitySettings/fetch',
-  async (communityId) => {
-    const [data, mems, usrs] = await Promise.all([
-      apiRequest(`/communities/${communityId}`),
-      // The member list is optional: the form still works without it
-      apiRequest(`/memberships?communityId=${communityId}`).catch(() => null),
-      apiRequest(`/users?communityId=${communityId}`).catch(() => null),
-    ]);
+  async (communityId, { rejectWithValue }) => {
+    try {
+      const [data, mems, usrs] = await Promise.all([
+        apiRequest(`/communities/${communityId}`),
+        apiRequest(`/memberships?communityId=${communityId}`).catch(() => null),
+        apiRequest(`/users?communityId=${communityId}`).catch(() => null),
+      ]);
 
-    let members = [];
-    if (Array.isArray(mems) && Array.isArray(usrs)) {
-      const usersById = new Map(usrs.map((u) => [String(u.id), u]));
-      members = mems.map((m) => {
-        const u = usersById.get(String(m.userId)) || {};
-        const uName = u.fullName || u.name || u.username || `User #${m.userId}`;
-        return {
-          id: m.id,
-          userId: m.userId,
-          name: uName,
-          handle: `@${u.username || 'user'}`,
-          role: u.id === data.ownerId ? 'Owner' : (u.role || 'Member'),
-          initials: uName.slice(0, 2).toUpperCase(),
-        };
-      });
+      let members = [];
+      if (Array.isArray(mems) && Array.isArray(usrs)) {
+        const usersById = new Map(usrs.map((u) => [String(u.id), u]));
+        members = mems.map((m) => {
+          const u = usersById.get(String(m.userId)) || {};
+          const uName = u.fullName || u.name || u.username || `User #${m.userId}`;
+          return {
+            id: m.id,
+            userId: m.userId,
+            name: uName,
+            handle: `@${u.username || 'user'}`,
+            role: u.id === data.ownerId ? 'Owner' : (u.role || 'Member'),
+            initials: uName.slice(0, 2).toUpperCase(),
+          };
+        });
+      }
+
+      return {
+        ...DEFAULT_COMMUNITY,
+        ...data,
+        members,
+        rules: Array.isArray(data.rules) ? data.rules.join('\n') : data.rules || DEFAULT_COMMUNITY.rules,
+        channels: Array.isArray(data.channels)
+          ? data.channels.map((ch, idx) => (typeof ch === 'string' ? { id: idx + 1, name: ch, type: 'Text' } : ch))
+          : DEFAULT_COMMUNITY.channels,
+      };
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to fetch community settings' });
     }
-
-    return {
-      ...DEFAULT_COMMUNITY,
-      ...data,
-      members,
-      // The rules textarea edits one rule per line
-      rules: Array.isArray(data.rules) ? data.rules.join('\n') : data.rules || DEFAULT_COMMUNITY.rules,
-      channels: Array.isArray(data.channels)
-        ? data.channels.map((ch, idx) => (typeof ch === 'string' ? { id: idx + 1, name: ch, type: 'Text' } : ch))
-        : DEFAULT_COMMUNITY.channels,
-    };
   }
 );
 
 // PATCH /communities/:id with the draft from the store
 export const saveCommunitySettings = createAsyncThunk(
   'communitySettings/save',
-  async (_, { getState }) => {
-    const { communityId, community } = getState().communitySettings;
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { communityId, community } = getState().communitySettings;
 
-    const rules = typeof community.rules === 'string'
-      ? community.rules.split('\n').map((r) => r.trim()).filter(Boolean)
-      : community.rules;
+      const rules = typeof community.rules === 'string'
+        ? community.rules.split('\n').map((r) => r.trim()).filter(Boolean)
+        : community.rules;
 
-    // Normalise channels to plain objects the backend can store
-    const channels = (community.channels || []).map((ch, idx) => ({
-      id: ch.id ? String(ch.id) : (ch.name ? String(ch.name) : String(idx + 1)),
-      name: ch.name,
-      type: ch.type || 'Text',
-      topic: ch.topic || `#${ch.name} channel`,
-    }));
+      // Normalise channels to plain objects the backend can store
+      const channels = (community.channels || []).map((ch, idx) => ({
+        id: ch.id ? String(ch.id) : (ch.name ? String(ch.name) : String(idx + 1)),
+        name: ch.name,
+        type: ch.type || 'Text',
+        topic: ch.topic || `#${ch.name} channel`,
+      }));
 
-    return apiRequest(`/communities/${communityId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        name: community.name,
-        description: community.description,
-        banner: community.banner || undefined,
-        rules,
-        channels,
-      }),
-    });
+      const res = await apiRequest(`/communities/${communityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: community.name,
+          description: community.description,
+          banner: community.banner || undefined,
+          rules,
+          channels,
+        }),
+      });
+      return res;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to save community settings' });
+    }
   }
 );
 
-// DELETE /memberships/:id takes effect immediately (not on Save)
+// Creates a channel and commits it to the backend community channels
+export const createChannel = createAsyncThunk(
+  'communitySettings/createChannel',
+  async ({ communityId, name, type }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState().communitySettings;
+      const targetId = communityId || state.communityId;
+      const cleanName = name.trim().toLowerCase().replace(/\s+/g, '-');
+      const newChannel = { id: Date.now(), name: cleanName, type: type || 'Text', topic: `#${cleanName} channel` };
+      const currentChannels = state.community.channels || [];
+      const updatedChannels = [...currentChannels, newChannel];
+      const res = await apiRequest(`/communities/${targetId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ channels: updatedChannels }),
+      });
+      return { channel: newChannel, res };
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to create channel' });
+    }
+  }
+);
+
+// DELETE /memberships/:id takes effect immediately
 export const removeMember = createAsyncThunk(
   'communitySettings/removeMember',
-  async (memberId) => {
-    await apiRequest(`/memberships/${memberId}`, { method: 'DELETE' });
-    return memberId;
+  async (memberId, { rejectWithValue }) => {
+    try {
+      await apiRequest(`/memberships/${memberId}`, { method: 'DELETE' });
+      return memberId;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to remove member' });
+    }
   }
 );
 
-// Uploads the image first and keeps only the short URL; the banner DTO allows max 300 chars
+// Uploads the image first and returns short URL
 export const uploadBanner = createAsyncThunk(
   'communitySettings/uploadBanner',
-  async (file) => {
-    const upload = new FormData();
-    upload.append('file', file);
-    const { fileUrl } = await apiRequest('/uploads', { method: 'POST', body: upload });
-    return fileUrl;
+  async (file, { rejectWithValue }) => {
+    try {
+      const upload = new FormData();
+      upload.append('file', file);
+      const { fileUrl } = await apiRequest('/uploads', { method: 'POST', body: upload });
+      return fileUrl;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to upload banner' });
+    }
   }
 );
 
@@ -107,6 +151,11 @@ const initialState = {
   loading: true,
   saving: false,
   isDirty: false,
+  // UI State moved to Redux
+  activeTab: 'general',
+  modalOpen: false,
+  newChName: '',
+  newChType: 'Text',
 };
 
 const communitySettingsSlice = createSlice({
@@ -133,7 +182,6 @@ const communitySettingsSlice = createSlice({
         state.community.channels.push(action.payload);
         state.isDirty = true;
       },
-      // prepare() builds the new channel: reducers must not call Date.now()
       prepare({ name, type }) {
         const cleanName = name.trim().toLowerCase().replace(/\s+/g, '-');
         return { payload: { id: Date.now(), name: cleanName, type } };
@@ -143,11 +191,25 @@ const communitySettingsSlice = createSlice({
       state.community = state.initialCommunity;
       state.isDirty = false;
     },
+    setActiveTab(state, action) {
+      state.activeTab = action.payload;
+    },
+    setModalOpen(state, action) {
+      state.modalOpen = action.payload;
+    },
+    setNewChName(state, action) {
+      state.newChName = action.payload;
+    },
+    setNewChType(state, action) {
+      state.newChType = action.payload;
+    },
+    resetCommunitySettings() {
+      return initialState;
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchCommunitySettings.pending, (state, action) => {
-        // Opening another community must not show the previous one's data
         if (action.meta.arg !== state.communityId) {
           state.community = DEFAULT_COMMUNITY;
           state.initialCommunity = DEFAULT_COMMUNITY;
@@ -162,7 +224,6 @@ const communitySettingsSlice = createSlice({
         state.initialCommunity = action.payload;
       })
       .addCase(fetchCommunitySettings.rejected, (state) => {
-        // Keep the fallback data, as before
         state.loading = false;
       })
       .addCase(saveCommunitySettings.pending, (state) => {
@@ -186,6 +247,13 @@ const communitySettingsSlice = createSlice({
       .addCase(saveCommunitySettings.rejected, (state) => {
         state.saving = false;
       })
+      .addCase(createChannel.fulfilled, (state, action) => {
+        state.community.channels.push(action.payload.channel);
+        state.modalOpen = false;
+        state.newChName = '';
+        state.newChType = 'Text';
+        state.isDirty = false;
+      })
       .addCase(removeMember.fulfilled, (state, action) => {
         const keep = (m) => m.id !== action.payload;
         state.community.members = state.community.members.filter(keep);
@@ -205,8 +273,17 @@ export const {
   channelDeleted,
   channelCreated,
   changesDiscarded,
+  setActiveTab,
+  setModalOpen,
+  setNewChName,
+  setNewChType,
+  resetCommunitySettings,
 } = communitySettingsSlice.actions;
 
 export const selectCommunitySettings = (state) => state.communitySettings;
+export const selectSettingsActiveTab = (state) => state.communitySettings.activeTab;
+export const selectSettingsModalOpen = (state) => state.communitySettings.modalOpen;
+export const selectNewChName = (state) => state.communitySettings.newChName;
+export const selectNewChType = (state) => state.communitySettings.newChType;
 
 export default communitySettingsSlice.reducer;

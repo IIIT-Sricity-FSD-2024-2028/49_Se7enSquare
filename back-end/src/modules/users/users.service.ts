@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { db, nextId, saveDb, UserRecord } from '../../common/utils/in-memory-db';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { db, nextId, saveDb, UserRecord, verifyPassword } from '../../common/utils/in-memory-db';
 import { sanitizeUser, SanitizedUser } from '../../common/utils/sanitize-user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -106,6 +106,18 @@ export class UsersService {
     targetUser.role = payload.role;
     saveDb();
     return sanitizeUser(targetUser);
+  }
+
+  removeMe(user: UserRecord, password: string): { message: string } {
+    if (!user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+      throw new ForbiddenException('Confirm your account password before deleting your account');
+    }
+    if (user.role === AppRole.ADMIN && !db.users.some((other) =>
+      other.id !== user.id && other.role === AppRole.ADMIN && other.status === 'active',
+    )) {
+      throw new BadRequestException('Cannot delete the last administrator on the platform');
+    }
+    return this.remove(user.id);
   }
 
   remove(id: number): { message: string } {

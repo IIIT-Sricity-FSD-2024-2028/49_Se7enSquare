@@ -1,25 +1,25 @@
 // Page container component for viewing event tournament registrants.
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import SideBar from '../../Components/SideBar';
 import '../../styles/global.css';
 import '../../styles/sidebar.css';
 import '../../styles/admin-dashboard.css';
 
 import { useToast } from '../../Components/event-management/hooks/useToast';
-import { fetchRegistrants, selectRegistrants } from '../../store/slices/eventsSlice';
+import { fetchRegistrants, selectRegistrants, clearCurrentEvent } from '../../store/slices/eventsSlice';
 import PageHeader from '../../Components/event-management/common/PageHeader';
 import EmptyState from '../../Components/event-management/common/EmptyState';
 import RegistrantsTable from './RegistrantsTable';
 
 export default function EventRegistrants() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
   const eventId = searchParams.get('eventId');
 
-  const { title: eventTitle, list: registrants, loading, error: errorMsg } = useSelector(selectRegistrants);
+  const { title: eventTitle, list: registrants, loading, error: errorMsg } = useAppSelector(selectRegistrants);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -27,10 +27,16 @@ export default function EventRegistrants() {
     dispatch(fetchRegistrants(eventId))
       .unwrap()
       .catch((err) => {
-        // "Not found" / "No registrants yet" are shown in the table only; other failures also get a toast
         if (err?.status !== 404) showToast(`⚠️ ${err?.message || 'Could not load registrants.'}`);
       });
   }, [dispatch, eventId, showToast]);
+
+  // Unmount cleanup: clear registrant state on exit
+  useEffect(() => {
+    return () => {
+      dispatch(clearCurrentEvent());
+    };
+  }, [dispatch]);
 
   return (
     <div className="app-shell">
@@ -89,8 +95,7 @@ export default function EventRegistrants() {
             />
           </div>
         )}
-
-        </div>
+      </div>
     </div>
   );
 }

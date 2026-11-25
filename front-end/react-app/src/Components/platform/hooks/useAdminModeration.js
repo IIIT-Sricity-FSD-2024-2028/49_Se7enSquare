@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
   fetchReports,
   fetchEvents,
@@ -10,6 +10,7 @@ import {
   reviewAppeal,
   reviewOrganizerApp,
   reviewModeratorApp,
+  resetAdminModeration,
   selectReports,
   selectEvents,
   selectAppeals,
@@ -30,12 +31,12 @@ const ACTION_TOASTS = {
  * tabs to the Redux adminModeration slice.
  */
 export default function useAdminModeration(showToast) {
-  const dispatch = useDispatch();
-  const reports = useSelector(selectReports);
-  const events = useSelector(selectEvents);
-  const appeals = useSelector(selectAppeals);
-  const organizerApps = useSelector(selectOrganizerApps);
-  const moderatorApps = useSelector(selectModeratorApps);
+  const dispatch = useAppDispatch();
+  const reports = useAppSelector(selectReports);
+  const events = useAppSelector(selectEvents);
+  const appeals = useAppSelector(selectAppeals);
+  const organizerApps = useAppSelector(selectOrganizerApps);
+  const moderatorApps = useAppSelector(selectModeratorApps);
 
   // Initial load once on mount
   useEffect(() => {
@@ -44,6 +45,13 @@ export default function useAdminModeration(showToast) {
     dispatch(fetchEvents());
     dispatch(fetchApplications());
     dispatch(fetchDashboardStats());
+  }, [dispatch]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(resetAdminModeration());
+    };
   }, [dispatch]);
 
   const handleModerationAction = async (item, actionType, note) => {

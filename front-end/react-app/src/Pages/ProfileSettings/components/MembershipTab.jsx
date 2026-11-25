@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { PLANS } from '../../../Components/platform/data/pricingPlans';
+import React from 'react';
+import { useAppSelector } from '../../../store/hooks';
+import { selectActiveSubscriptionPlan } from '../../../store/selectors/authDashboardSelectors';
 
 function ApplicationStatus({ data, error, roleLabel }) {
   if (error) {
@@ -64,11 +65,12 @@ export default function MembershipTab({ p }) {
     setOrganiserForm,
     statement,
     setStatement,
+    showCustomOrganiser,
+    setShowCustomOrganiser,
   } = p;
 
-  const [showCustomOrganiser, setShowCustomOrganiser] = useState(false);
-
-  const plan = PLANS.find((item) => item.id === p.plan?.plan);
+  const activePlan = useAppSelector(selectActiveSubscriptionPlan);
+  const plan = p.plan ? activePlan : null;
   const canOrganise = user.role === 'user';
   const canModerate = ['user', 'organizer', 'community_manager'].includes(user.role);
 

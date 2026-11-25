@@ -1,53 +1,50 @@
 // User registration modal dialog for signing up to an event.
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import {
+  selectRegistrationForm,
+  setRegistrationFormField,
+  resetRegistrationForm,
+} from '../../store/slices/eventsSlice';
 
 export default function RegistrationModal({
   event,
   isOpen,
   onClose,
   onSubmit,
-  isSubmitting = false,
-  currentUser = null,
 }) {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    inGameId: '',
-  });
-  const [errors, setErrors] = useState({});
+  const dispatch = useAppDispatch();
+  const formData = useAppSelector(selectRegistrationForm);
 
+  // Unmount cleanup: reset form on unmount or close
   useEffect(() => {
-    if (isOpen && currentUser) {
-      setFormData((prev) => ({
-        fullName: prev.fullName || currentUser.name || currentUser.username || '',
-        email: prev.email || currentUser.email || '',
-        phone: prev.phone || '',
-        inGameId: prev.inGameId || '',
-      }));
-    }
-  }, [isOpen, currentUser]);
+    return () => {
+      dispatch(resetRegistrationForm());
+    };
+  }, [dispatch]);
+
+  const handleChange = useCallback(
+    (field, value) => {
+      dispatch(setRegistrationFormField({ field, value }));
+    },
+    [dispatch]
+  );
 
   if (!isOpen || !event) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (isSubmitting) return;
-
-    const newErrors = {};
-    if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required.';
-    if (!formData.email.trim()) newErrors.email = 'Email is required.';
-    if (!formData.inGameId.trim()) newErrors.inGameId = 'In-game handle is required.';
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    if (!formData.fullName.trim() || !formData.email.trim() || !formData.inGameId.trim()) {
       return;
     }
-
-    setErrors({});
     if (onSubmit) {
       onSubmit(event, formData);
     }
+  };
+
+  const handleClose = () => {
+    dispatch(resetRegistrationForm());
+    if (onClose) onClose();
   };
 
   return (
@@ -55,15 +52,14 @@ export default function RegistrationModal({
       id="registerModal"
       className="event-modal"
       onClick={(e) => {
-        if (e.target === e.currentTarget && onClose && !isSubmitting) onClose();
+        if (e.target === e.currentTarget && handleClose) handleClose();
       }}
     >
       <div className="event-modal-content">
         <button
           className="event-modal-close"
-          onClick={onClose}
+          onClick={handleClose}
           aria-label="Close"
-          disabled={isSubmitting}
         >
           ×
         </button>
@@ -87,13 +83,10 @@ export default function RegistrationModal({
               id="regFullName"
               type="text"
               placeholder="Your full name"
+              required
               value={formData.fullName}
-              disabled={isSubmitting}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, fullName: e.target.value }))
-              }
+              onChange={(e) => handleChange('fullName', e.target.value)}
             />
-            {errors.fullName && <div className="error-msg">{errors.fullName}</div>}
           </div>
 
           <div className="field">
@@ -102,13 +95,10 @@ export default function RegistrationModal({
               id="regEmail"
               type="email"
               placeholder="you@example.com"
+              required
               value={formData.email}
-              disabled={isSubmitting}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, email: e.target.value }))
-              }
+              onChange={(e) => handleChange('email', e.target.value)}
             />
-            {errors.email && <div className="error-msg">{errors.email}</div>}
           </div>
 
           <div className="field">
@@ -118,10 +108,7 @@ export default function RegistrationModal({
               type="tel"
               placeholder="e.g. 9876543210"
               value={formData.phone}
-              disabled={isSubmitting}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, phone: e.target.value }))
-              }
+              onChange={(e) => handleChange('phone', e.target.value)}
             />
           </div>
 
@@ -131,32 +118,25 @@ export default function RegistrationModal({
               id="regInGameId"
               type="text"
               placeholder="Your in-game handle"
+              required
               value={formData.inGameId}
-              disabled={isSubmitting}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, inGameId: e.target.value }))
-              }
+              onChange={(e) => handleChange('inGameId', e.target.value)}
             />
-            {errors.inGameId && (
-              <div className="error-msg">{errors.inGameId}</div>
-            )}
           </div>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn-draft"
-              onClick={onClose}
-              disabled={isSubmitting}
+              onClick={handleClose}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="btn-publish"
-              disabled={isSubmitting}
             >
-              {isSubmitting ? 'Registering...' : 'Confirm Registration'}
+              Confirm Registration
             </button>
           </div>
         </form>

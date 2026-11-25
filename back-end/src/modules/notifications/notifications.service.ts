@@ -9,6 +9,21 @@ export class NotificationsService {
       .sort((a, b) => b.id - a.id);
   }
 
+  create(entry: Pick<NotificationRecord, 'userId' | 'type' | 'text'>): NotificationRecord {
+    if (!db.users.some((user) => user.id === entry.userId)) {
+      throw new NotFoundException('Notification recipient not found');
+    }
+    return NotificationsService.push(entry);
+  }
+
+  remove(id: number, userId: number): { id: number } {
+    const index = db.notifications.findIndex((item) => item.id === id && item.userId === userId);
+    if (index === -1) throw new NotFoundException('Notification not found');
+    db.notifications.splice(index, 1);
+    saveDb();
+    return { id };
+  }
+
   markRead(id: number, read: boolean): NotificationRecord {
     const notification = db.notifications.find((item) => item.id === id);
     if (!notification) throw new NotFoundException(`Notification with id ${id} not found`);
@@ -34,13 +49,15 @@ export class NotificationsService {
    * this project's existing pattern of touching `db` straight from services).
    * Not exposed as an HTTP route.
    */
-  static push(entry: Omit<NotificationRecord, 'id' | 'read' | 'createdAt'>): void {
-    db.notifications.unshift({
+  static push(entry: Omit<NotificationRecord, 'id' | 'read' | 'createdAt'>): NotificationRecord {
+    const notification = {
       id: nextId('notification'),
       read: false,
       createdAt: new Date().toISOString(),
       ...entry,
-    });
+    };
+    db.notifications.unshift(notification);
     saveDb();
+    return notification;
   }
 }

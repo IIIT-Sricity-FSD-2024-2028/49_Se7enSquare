@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { toastShown } from '../../../store/slices/uiSlice';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
@@ -11,9 +11,11 @@ import {
   selectModReports,
   selectModReportsLoading,
   selectModProcessing,
-  selectQueueCounts,
+  resetModPanelState,
+  modPanelUiChanged,
   selectRecentModActions,
 } from '../../../store/slices/modPanelSlice';
+import { selectFilteredModReports, selectSelectedModReport, selectModQueueCounts, selectModPanelUi } from '../../../store/selectors/modPanelSelectors';
 import { QUEUE_TABS, MOD_ACTIONS } from '../../../Components/platform/data/modPanelData';
 
 /**
@@ -23,24 +25,27 @@ import { QUEUE_TABS, MOD_ACTIONS } from '../../../Components/platform/data/modPa
  */
 export default function useModPanel() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const sessionUser = useSelector(selectCurrentUser);
+  const dispatch = useAppDispatch();
+  const sessionUser = useAppSelector(selectCurrentUser);
   const user = {
     role: sessionUser?.role || 'moderator',
     firstName: sessionUser?.firstName || sessionUser?.username || 'Moderator',
     username: sessionUser?.username || 'moderator',
   };
 
-  const reports = useSelector(selectModReports);
-  const loading = useSelector(selectModReportsLoading);
-  const processing = useSelector(selectModProcessing);
-  const queueCounts = useSelector(selectQueueCounts);
-  const recentActions = useSelector(selectRecentModActions);
+  const reports = useAppSelector(selectModReports);
+  const loading = useAppSelector(selectModReportsLoading);
+  const processing = useAppSelector(selectModProcessing);
+  const queueCounts = useAppSelector(selectModQueueCounts);
+  const recentActions = useAppSelector(selectRecentModActions);
 
-  const [activeQTab, setActiveQTab] = useState('pending');
-  const [selectedId, setSelectedId] = useState(null);
-  const [queueSearch, setQueueSearch] = useState('');
-  const [actionNote, setActionNote] = useState('');
+  const { activeQTab, queueSearch, actionNote } = useAppSelector(selectModPanelUi);
+  const setActiveQTab = (value) => dispatch(modPanelUiChanged({ activeQTab: value }));
+  const setQueueSearch = (value) => dispatch(modPanelUiChanged({ queueSearch: value }));
+  const setActionNote = (value) => dispatch(modPanelUiChanged({ actionNote: value }));
+  const setSelectedReport = (report) => dispatch(modPanelUiChanged({ selectedId: report?.id ?? null }));
+
+  useEffect(() => () => dispatch(resetModPanelState()), [dispatch]);
 
   const showToast = (msg) => dispatch(toastShown({ msg }));
 
@@ -48,19 +53,8 @@ export default function useModPanel() {
     dispatch(fetchModReports());
   }, [dispatch, user.role]);
 
-  // Only the id is kept locally, so the detail view always shows the store's
-  // latest copy of the report. Falls back to the first report.
-  const selectedReport = reports.find((r) => r.id === selectedId) || reports[0] || null;
-  const setSelectedReport = (report) => setSelectedId(report?.id ?? null);
-
-  const filteredReports = reports.filter(
-    (r) =>
-      r.status === activeQTab &&
-      (!queueSearch ||
-        r.reportedUser?.toLowerCase().includes(queueSearch.toLowerCase()) ||
-        r.ref?.toLowerCase().includes(queueSearch.toLowerCase()) ||
-        r.reason?.toLowerCase().includes(queueSearch.toLowerCase()))
-  );
+  const selectedReport = useAppSelector(selectSelectedModReport);
+  const filteredReports = useAppSelector(selectFilteredModReports);
 
   const takeAction = async (modAction, report) => {
     const result = await dispatch(takeModAction({ modAction, report, note: actionNote.trim() }));

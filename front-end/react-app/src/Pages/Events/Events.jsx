@@ -1,6 +1,6 @@
 // Page container component for Events & Tournaments module.
-import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import SideBar from '../../Components/SideBar';
 import '../../styles/global.css';
 import '../../styles/events.css';
@@ -12,9 +12,16 @@ import { CATEGORIES } from '../../Components/event-management/utils/constants';
 import { getCommunityObject } from '../../Components/event-management/utils/getCommunityName';
 import { selectCurrentUser } from '../../store/slices/authSlice';
 import { fetchCommunityList, selectAllCommunities } from '../../store/slices/communitiesSlice';
+import {
+  openModal,
+  closeModal,
+  clearCurrentEvent,
+  selectEventModalState,
+  selectCurrentEvent,
+} from '../../store/slices/eventsSlice';
+import { selectFeaturedEvent } from '../../store/selectors/eventSelectors';
 
 import PageHeader from '../../Components/event-management/common/PageHeader';
-
 import CategoryFilterChips from './CategoryFilterChips';
 import FeaturedEventBanner from './FeaturedEventBanner';
 import EventsGrid from './EventsGrid';
@@ -22,11 +29,15 @@ import EventDetailModal from './EventDetailModal';
 import RegistrationModal from './RegistrationModal';
 
 export default function Events() {
-  const dispatch = useDispatch();
-  const user = useSelector(selectCurrentUser);
-  const communities = useSelector(selectAllCommunities);
-  const [detailEvent, setDetailEvent] = useState(null);
-  const [registerEvent, setRegisterEvent] = useState(null);
+  const dispatch = useAppDispatch();
+  const user = useAppSelector(selectCurrentUser);
+  const communities = useAppSelector(selectAllCommunities);
+  const modalState = useAppSelector(selectEventModalState);
+  const currentEvent = useAppSelector(selectCurrentEvent);
+  const featuredEvent = useAppSelector(selectFeaturedEvent);
+
+  const isDetailOpen = modalState.isOpen && modalState.mode === 'view';
+  const isRegisterOpen = modalState.isOpen && modalState.mode === 'register';
 
   const { showToast } = useToast();
   const {
@@ -41,20 +52,26 @@ export default function Events() {
     dispatch(fetchCommunityList());
   }, [dispatch]);
 
-  const {
-    isRegistered,
-    isRegisterPending,
-    isLeavePending,
-    registerForEvent,
-    cancelRegistration,
-  } = useRegistrations();
+  // Unmount cleanup: close modals and clear selected event
+  useEffect(() => {
+    return () => {
+      dispatch(closeModal());
+      dispatch(clearCurrentEvent());
+    };
+  }, [dispatch]);
+
+  const { isRegistered, registerForEvent, cancelRegistration } = useRegistrations();
 
   const handleOpenRegisterModal = (ev) => {
     if (!user || !user.id) {
       showToast('Please log in to register');
       return;
     }
-    setRegisterEvent(ev);
+    dispatch(openModal({ mode: 'register', event: ev }));
+  };
+
+  const handleOpenDetailModal = (ev) => {
+    dispatch(openModal({ mode: 'view', event: ev }));
   };
 
   const handleConfirmRegistration = async (ev, regData) => {
@@ -64,27 +81,20 @@ export default function Events() {
     }
     const res = await registerForEvent(ev, regData);
     if (res.success) {
-      showToast('Registered successfully! ⚡');
-      setRegisterEvent(null);
+      showToast('Registered successfully!');
+      dispatch(closeModal());
     } else {
-      showToast(`⚠️ ${res.error || 'Could not register. Please try again.'}`);
+      showToast(res.error || 'Could not register. Please try again.');
     }
   };
 
   const handleCancel = async (regOrEv) => {
-    const title = regOrEv?.title || regOrEv?.eventTitle || 'this event';
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm &&
-      !window.confirm(`Are you sure you want to leave "${title}"?`)
-    ) {
-      return;
-    }
-    const res = await cancelRegistration(regOrEv);
-    if (res?.success) {
-      showToast('Left event successfully.');
-    } else {
-      showToast(`⚠️ ${res?.error || 'Could not leave event.'}`);
+    if (!window.confirm(`Cancel registration for "${regOrEv.title || regOrEv.eventTitle || 'this event'}"?`)) return;
+    try {
+      await cancelRegistration(regOrEv);
+      showToast('Registration cancelled.');
+    } catch (err) {
+      showToast(`⚠️ ${err?.message || 'Could not cancel registration.'}`);
     }
   };
 
@@ -111,16 +121,13 @@ export default function Events() {
             onSelectCategory={setSelectedCategory}
           />
 
-          {upcomingEvents.length > 0 && (
+          {featuredEvent && (
             <FeaturedEventBanner
-              event={upcomingEvents[0]}
-              comm={getCommunityObject(upcomingEvents[0].communityId, communities)}
-              isRegistered={isRegistered(upcomingEvents[0].id)}
-              isRegisterPending={isRegisterPending(upcomingEvents[0].id)}
-              isLeavePending={isLeavePending(upcomingEvents[0].id)}
-              onView={setDetailEvent}
+              event={featuredEvent}
+              comm={getCommunityObject(featuredEvent.communityId, communities)}
+              isRegistered={isRegistered(featuredEvent.id)}
+              onView={handleOpenDetailModal}
               onRegister={handleOpenRegisterModal}
-              onCancel={handleCancel}
             />
           )}
 
@@ -136,9 +143,7 @@ export default function Events() {
             loading={eventsLoading}
             getCommunity={(id) => getCommunityObject(id, communities)}
             isRegistered={isRegistered}
-            isRegisterPending={isRegisterPending}
-            isLeavePending={isLeavePending}
-            onView={setDetailEvent}
+            onView={handleOpenDetailModal}
             onRegister={handleOpenRegisterModal}
             onCancel={handleCancel}
             canDelete={user?.role === 'admin'}
@@ -147,26 +152,20 @@ export default function Events() {
         </div>
 
         <EventDetailModal
-          event={detailEvent}
-          isOpen={!!detailEvent}
-          onClose={() => setDetailEvent(null)}
-          isRegistered={detailEvent ? isRegistered(detailEvent.id) : false}
-          isRegisterPending={detailEvent ? isRegisterPending(detailEvent.id) : false}
-          isLeavePending={detailEvent ? isLeavePending(detailEvent.id) : false}
+          event={currentEvent}
+          isOpen={isDetailOpen && !!currentEvent}
+          onClose={() => dispatch(closeModal())}
+          isRegistered={currentEvent ? isRegistered(currentEvent.id) : false}
           onRegister={handleOpenRegisterModal}
-          onCancel={handleCancel}
         />
 
         <RegistrationModal
-          event={registerEvent}
-          isOpen={!!registerEvent}
-          onClose={() => setRegisterEvent(null)}
+          event={currentEvent}
+          isOpen={isRegisterOpen && !!currentEvent}
+          onClose={() => dispatch(closeModal())}
           onSubmit={handleConfirmRegistration}
-          isSubmitting={registerEvent ? isRegisterPending(registerEvent.id) : false}
-          currentUser={user}
         />
-
-        </div>
+      </div>
     </div>
   );
 }

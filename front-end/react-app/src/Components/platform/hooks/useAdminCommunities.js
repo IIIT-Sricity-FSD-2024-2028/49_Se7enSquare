@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
   fetchCommunities,
   suspendCommunity as suspendCommunityThunk,
   reinstateCommunity as reinstateCommunityThunk,
+  resetAdminCommunities,
   selectAdminCommunities,
 } from '../../../store/slices/adminCommunitiesSlice';
 
@@ -12,8 +13,8 @@ import {
  * Adds the reason prompt / confirmation and the toasts around the thunks.
  */
 export default function useAdminCommunities(showToast) {
-  const dispatch = useDispatch();
-  const communities = useSelector(selectAdminCommunities);
+  const dispatch = useAppDispatch();
+  const communities = useAppSelector(selectAdminCommunities);
 
   const refreshCommunities = useCallback(() => dispatch(fetchCommunities()), [dispatch]);
 
@@ -21,6 +22,13 @@ export default function useAdminCommunities(showToast) {
   useEffect(() => {
     refreshCommunities();
   }, [refreshCommunities]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(resetAdminCommunities());
+    };
+  }, [dispatch]);
 
   const nameOf = (communityId) =>
     communities.find((c) => c.id === communityId)?.name || `community #${communityId}`;

@@ -16,6 +16,17 @@ export const fetchSubscriptionStatus = createAsyncThunk(
   }
 );
 
+export const createSubscription = createAsyncThunk(
+  'pricing/createSubscription',
+  async ({ userId, plan }) => {
+    const subscription = await apiRequest('/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({ userId: Number(userId), plan }),
+    });
+    return subscription.plan;
+  }
+);
+
 // POST /subscriptions/upgrade { userId, plan } (also used for downgrades)
 export const changePlan = createAsyncThunk(
   'pricing/changePlan',
@@ -51,6 +62,9 @@ const pricingSlice = createSlice({
   name: 'pricing',
   initialState,
   reducers: {
+    resetPricingState(state) {
+      state.error = null;
+    },
     // Logged-out users and platform owners have no plan to load
     statusSkipped(state) {
       state.isLoading = false;
@@ -69,6 +83,16 @@ const pricingSlice = createSlice({
       .addCase(fetchSubscriptionStatus.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message;
+      })
+      .addCase(createSubscription.pending, (state) => {
+        state.isSubmitting = true;
+      })
+      .addCase(createSubscription.fulfilled, (state, action) => {
+        state.isSubmitting = false;
+        state.currentPlan = action.payload;
+      })
+      .addCase(createSubscription.rejected, (state) => {
+        state.isSubmitting = false;
       })
       .addCase(changePlan.pending, (state) => {
         state.isSubmitting = true;
@@ -95,7 +119,7 @@ const pricingSlice = createSlice({
   },
 });
 
-export const { statusSkipped } = pricingSlice.actions;
+export const { statusSkipped, resetPricingState } = pricingSlice.actions;
 
 export const selectCurrentPlan = (state) => state.pricing.currentPlan;
 export const selectPricingLoading = (state) => state.pricing.isLoading;

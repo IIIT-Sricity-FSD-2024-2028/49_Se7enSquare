@@ -22,7 +22,7 @@ export default function Chat() {
       <ChatHeader
         communityId={c.communityId}
         user={c.user}
-        membersCount={c.members.length}
+        membersCount={c.stats.members}
         onToggleSearch={() => c.setShowSearch(s => !s)}
         onTogglePinned={() => c.setShowPinned(s => !s)}
         onToggleMembers={() => c.setShowMembers(s => !s)}
@@ -91,6 +91,9 @@ export default function Chat() {
             onToggleReaction={c.toggleReaction}
             onSetReplyTo={c.setReplyTo}
             messagesEndRef={c.messagesEndRef}
+            user={c.user}
+            onTogglePin={c.togglePin}
+            onDelete={c.removeMessage}
           />
 
           {/* Message Input pinned at bottom */}
@@ -111,7 +114,7 @@ export default function Chat() {
           />
 
           {c.showPinned && (
-            <PinnedMessagesModal onClose={() => c.setShowPinned(false)} />
+            <PinnedMessagesModal messages={c.pinnedMessages} onClose={() => c.setShowPinned(false)} />
           )}
         </main>
 

@@ -19,6 +19,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -50,6 +51,11 @@ export class ReportsController {
   @ApiForbiddenResponse({ description: 'Only admin or moderator can view reports' })
   findAll() {
     return this.reportsService.findAll();
+  }
+
+  @Get('mine')
+  findMine(@CurrentUser('id') userId: number) {
+    return this.reportsService.findAll().filter((report) => report.reporterId === userId);
   }
 
   @Post()

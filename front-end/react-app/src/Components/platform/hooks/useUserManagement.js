@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchUsers, selectAdminUsers } from '../../../store/slices/adminUsersSlice';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { selectUserDirectoryCounts } from '../../../store/selectors/userSelectors';
+import {
+  fetchUsers, selectAdminUsers, selectFilteredUsers, selectUserSearch, selectUserRoleFilter,
+  userSearchChanged, userRoleFilterChanged, resetUserFilters,
+} from '../../../store/slices/adminUsersSlice';
 
 /**
  * Manages the User Management page. The user list is the same adminUsers slice
@@ -9,34 +13,21 @@ import { fetchUsers, selectAdminUsers } from '../../../store/slices/adminUsersSl
  */
 export default function useUserManagement() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const users = useSelector(selectAdminUsers);
+  const dispatch = useAppDispatch();
+  const users = useAppSelector(selectAdminUsers);
 
-  const [loading,    setLoading]    = useState(true);
-  const [search,     setSearch]     = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
+  const loading = useAppSelector((state) => state.adminUsers.loading);
+  const search = useAppSelector(selectUserSearch);
+  const roleFilter = useAppSelector(selectUserRoleFilter);
+  const filteredUsers = useAppSelector(selectFilteredUsers);
+  const roleCounts = useAppSelector(selectUserDirectoryCounts);
+  const setSearch = (value) => dispatch(userSearchChanged(value));
+  const setRoleFilter = (value) => dispatch(userRoleFilterChanged(value));
 
   useEffect(() => {
-    // A failed fetch leaves the list empty, like before
-    dispatch(fetchUsers()).finally(() => setLoading(false));
+    dispatch(fetchUsers());
+    return () => dispatch(resetUserFilters());
   }, [dispatch]);
-
-  const filteredUsers = users.filter(u => {
-    const matchSearch =
-      !search ||
-      u.username?.toLowerCase().includes(search.toLowerCase()) ||
-      u.email?.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchSearch && matchRole;
-  });
-
-  // Derived role counts for stats
-  const roleCounts = {
-    total:     users.length,
-    admin:     users.filter(u => u.role === 'admin').length,
-    moderator: users.filter(u => u.role === 'moderator').length,
-    user:      users.filter(u => u.role === 'user').length,
-  };
 
   return {
     navigate,

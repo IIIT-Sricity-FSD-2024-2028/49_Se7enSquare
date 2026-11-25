@@ -1,22 +1,24 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectCurrentUser } from '../../../store/slices/authSlice';
 import {
   fetchOwnerOverview,
   openDrill as openDrillThunk,
   drillClosed,
+  resetOwnerDashboardState,
   selectOwnerStats,
   selectOwnerRevenue,
   selectDrill,
 } from '../../../store/slices/ownerDashboardSlice';
+import { selectOwnerKpiSummary } from '../../../store/selectors/adminSelectors';
 
 /**
  * Connects OwnerDashboard to the Redux ownerDashboard slice.
- * Presentation components render the drill-down tables; the data comes from the store.
+ * Uses memoized selectors and provides automatic unmount cleanup.
  */
 export default function useOwnerDashboard() {
-  const dispatch = useDispatch();
-  const sessionUser = useSelector(selectCurrentUser);
+  const dispatch = useAppDispatch();
+  const sessionUser = useAppSelector(selectCurrentUser);
   const currentUser = {
     id: sessionUser?.id,
     username: sessionUser?.username || 'owner',
@@ -25,17 +27,24 @@ export default function useOwnerDashboard() {
     role: sessionUser?.role || 'owner',
   };
 
-  const stats = useSelector(selectOwnerStats);
-  const revenue = useSelector(selectOwnerRevenue);
-  const drill = useSelector(selectDrill);
+  const stats = useAppSelector(selectOwnerStats);
+  const revenue = useAppSelector(selectOwnerRevenue);
+  const drill = useAppSelector(selectDrill);
+  const kpiSummary = useAppSelector(selectOwnerKpiSummary);
 
   useEffect(() => {
     dispatch(fetchOwnerOverview());
   }, [dispatch]);
 
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(resetOwnerDashboardState());
+    };
+  }, [dispatch]);
+
   const openDrill = (kind, filter) => dispatch(openDrillThunk({ kind, filter }));
 
-  // The page only ever closes the modal (onClose -> setDrillModalOpen(false))
   const setDrillModalOpen = (open) => {
     if (!open) dispatch(drillClosed());
   };
@@ -44,6 +53,7 @@ export default function useOwnerDashboard() {
     currentUser,
     stats,
     revenue,
+    kpiSummary,
     drillModalOpen: drill.open,
     setDrillModalOpen,
     drillTitle: drill.title,

@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
-import authReducer from './slices/authSlice';
+import authReducer, { logout } from './slices/authSlice';
+import { configureSession } from '../services/api';
 import uiReducer from './slices/uiSlice';
 import pricingReducer from './slices/pricingSlice';
 import reportReducer from './slices/reportSlice';
@@ -22,9 +23,10 @@ import { listenerMiddleware } from './listenerMiddleware';
 /**
  * Single Redux store for the whole app.
  * Each feature adds its slice under `reducer`.
- * configureStore also enables Redux DevTools and the default thunk middleware.
  */
 export const store = configureStore({
+  // Form drafts and thunk arguments can contain account credentials.
+  devTools: false,
   reducer: {
     auth: authReducer,
     ui: uiReducer,
@@ -47,4 +49,9 @@ export const store = configureStore({
   },
   // The listener middleware goes first, as recommended by Redux Toolkit
   middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+});
+
+configureSession({
+  read: () => store.getState().auth.user,
+  end: () => store.dispatch(logout()),
 });

@@ -45,24 +45,55 @@ export const fetchMyAppeals = createAsyncThunk(
   { condition: hasUser }
 );
 
-// Resolves with the real appeal id from the backend (shown as the reference number)
-export const submitAppeal = createAsyncThunk('appeal/submit', async (payload, { dispatch }) => {
-  const data = await appealService.createAppeal(payload);
-  dispatch(fetchMyAppeals());
-  return data.id;
-});
+export const submitAppeal = createAsyncThunk(
+  'appeal/submit',
+  (payload) => appealService.createAppeal(payload),
+  { condition: (_, { getState }) => !getState().appeal.submitting },
+);
+
+export const updateAppealStatus = createAsyncThunk(
+  'appeal/updateStatus',
+  ({ id, status }) => apiRequest(`/appeals/${id}/status`, {
+    method: 'PATCH', body: JSON.stringify({ status }),
+  }),
+);
+
+export const addAppealEvidence = createAsyncThunk(
+  'appeal/addEvidence',
+  ({ id, ...evidence }) => apiRequest(`/appeals/${id}/evidence`, {
+    method: 'POST', body: JSON.stringify(evidence),
+  }),
+);
+
+export const withdrawAppeal = createAsyncThunk(
+  'appeal/withdraw',
+  (id) => apiRequest(`/appeals/${id}`, { method: 'DELETE' }),
+);
+
+const initialForm = { appealType: '', statement: '', commitment: '', errors: {}, submitted: false, refId: '' };
 
 const initialState = {
+  form: initialForm,
   sanction: null,
   myAppeals: [],
   loadingAppeals: false,
   submitting: false,
+  submissionRequestId: null,
 };
 
 const appealSlice = createSlice({
   name: 'appeal',
   initialState,
-  reducers: {},
+  reducers: {
+    appealFormChanged(state, { payload }) {
+      Object.assign(state.form, payload);
+    },
+    resetAppealForm(state) {
+      state.form = initialForm;
+      state.submissionRequestId = null;
+      state.submitting = false;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchActiveSanction.fulfilled, (state, action) => {
@@ -78,18 +109,39 @@ const appealSlice = createSlice({
       .addCase(fetchMyAppeals.rejected, (state) => {
         state.loadingAppeals = false;
       })
-      .addCase(submitAppeal.pending, (state) => {
+      .addCase(submitAppeal.pending, (state, action) => {
         state.submitting = true;
+        state.submissionRequestId = action.meta.requestId;
       })
-      .addCase(submitAppeal.fulfilled, (state) => {
+      .addCase(submitAppeal.fulfilled, (state, action) => {
+        if (state.submissionRequestId !== action.meta.requestId) return;
         state.submitting = false;
+        state.submissionRequestId = null;
+        state.myAppeals.unshift(action.payload);
+        state.form.refId = `APL-${action.payload.id}`;
+        state.form.submitted = true;
       })
-      .addCase(submitAppeal.rejected, (state) => {
+      .addCase(submitAppeal.rejected, (state, action) => {
+        if (state.submissionRequestId !== action.meta.requestId) return;
         state.submitting = false;
+        state.submissionRequestId = null;
+        state.form.errors = { submit: `Appeal not sent: ${action.error.message}` };
       })
-      .addCase(logout, () => initialState);
+      .addCase(withdrawAppeal.fulfilled, (state, action) => {
+        state.myAppeals = state.myAppeals.filter(({ id }) => id !== action.payload.id);
+      })
+      .addCase(logout, () => initialState)
+      .addMatcher(
+        (action) => updateAppealStatus.fulfilled.match(action) || addAppealEvidence.fulfilled.match(action),
+        (state, action) => {
+          const index = state.myAppeals.findIndex(({ id }) => id === action.payload.id);
+          if (index !== -1) state.myAppeals[index] = action.payload;
+        },
+      );
   },
 });
+
+export const { appealFormChanged, resetAppealForm } = appealSlice.actions;
 
 export const selectAppealState = (state) => state.appeal;
 

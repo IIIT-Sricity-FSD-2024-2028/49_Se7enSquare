@@ -1,13 +1,12 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
+import { apiRequest } from '../../services/api';
 import { moderationService } from '../../services/moderationService';
-import { QUEUE_TABS } from '../../Components/platform/data/modPanelData';
 import { logout } from './authSlice';
 
 /**
  * Moderator Panel slice: the report queue and the moderator's actions on it.
  * Backend rule for report status: pending -> reviewed -> resolved (no skipping),
  * escalation is allowed from pending or reviewed.
- * The queue tab, search box, selected report and note box are page-only UI and stay in the hook.
  */
 
 // Reports only store targetType/targetId. Look each user/community up once so the
@@ -60,12 +59,11 @@ export const fetchModReports = createAsyncThunk('modPanel/fetchReports', async (
 
 /**
  * Steps: 1) pending -> reviewed, 2) create the sanction, 3) reviewed -> resolved.
- * `reached` remembers how far we got. If a later step fails, the rejected action
- * still carries `reached`, so the queue shows the real backend status (no fake success).
+ * If a later step fails, refresh the queue to reflect the confirmed status.
  */
 export const takeModAction = createAsyncThunk(
   'modPanel/takeAction',
-  async ({ modAction, report, note }, { rejectWithValue }) => {
+  async ({ modAction, report, note }, { dispatch, rejectWithValue }) => {
     const actionText = `${modAction.label}${note ? ` — ${note}` : ''}`;
     let reached = report.status;
     try {
@@ -87,7 +85,8 @@ export const takeModAction = createAsyncThunk(
       await moderationService.updateReportStatus(report.id, 'resolved', actionText);
       return { id: report.id, status: 'resolved', action: actionText };
     } catch (err) {
-      return rejectWithValue({ id: report.id, status: reached, message: err.message });
+      if (reached !== report.status) await dispatch(fetchModReports());
+      return rejectWithValue({ message: err.message });
     }
   },
   {
@@ -107,7 +106,21 @@ export const moveToReview = createAsyncThunk('modPanel/moveToReview', async (rep
   return { id: reportId, status: 'reviewed' };
 });
 
+export const createModReport = createAsyncThunk('modPanel/createReport', async (payload, { dispatch }) => {
+  const report = await apiRequest('/reports', { method: 'POST', body: JSON.stringify(payload) });
+  await dispatch(fetchModReports());
+  return report;
+});
+
+export const deleteModReport = createAsyncThunk('modPanel/deleteReport', async (id) => {
+  await apiRequest(`/reports/${id}`, { method: 'DELETE' });
+  return id;
+});
+
+const initialUi = { activeQTab: 'pending', selectedId: null, queueSearch: '', actionNote: '' };
+
 const initialState = {
+  ui: initialUi,
   reports: [],
   loading: true,
   processing: false,
@@ -124,7 +137,14 @@ function patchReport(state, { id, status, action }) {
 const modPanelSlice = createSlice({
   name: 'modPanel',
   initialState,
-  reducers: {},
+  reducers: {
+    modPanelUiChanged(state, { payload }) {
+      Object.assign(state.ui, payload);
+    },
+    resetModPanelState(state) {
+      state.ui = initialUi;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchModReports.pending, (state) => {
@@ -146,10 +166,8 @@ const modPanelSlice = createSlice({
         state.processing = false;
         patchReport(state, action.payload);
       })
-      .addCase(takeModAction.rejected, (state, action) => {
+      .addCase(takeModAction.rejected, (state) => {
         state.processing = false;
-        // Partial progress: the report may already be "reviewed" on the server
-        if (action.payload) patchReport(state, action.payload);
       })
 
       .addCase(escalateReport.pending, (state) => {
@@ -167,21 +185,18 @@ const modPanelSlice = createSlice({
         patchReport(state, action.payload);
       })
 
+      .addCase(deleteModReport.fulfilled, (state, action) => {
+        state.reports = state.reports.filter(({ id }) => id !== action.payload);
+      })
       .addCase(logout, () => initialState);
   },
 });
 
+export const { modPanelUiChanged, resetModPanelState } = modPanelSlice.actions;
+
 export const selectModReports = (state) => state.modPanel.reports;
 export const selectModReportsLoading = (state) => state.modPanel.loading;
 export const selectModProcessing = (state) => state.modPanel.processing;
-
-// Number of reports in each queue tab
-export const selectQueueCounts = createSelector([selectModReports], (reports) =>
-  QUEUE_TABS.reduce((acc, status) => {
-    acc[status] = reports.filter((r) => r.status === status).length;
-    return acc;
-  }, {})
-);
 
 export const selectRecentModActions = createSelector([selectModReports], (reports) =>
   reports.filter((r) => r.status === 'resolved' && r.action).slice(0, 3)

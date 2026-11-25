@@ -11,7 +11,7 @@ const ALL_TABS = [
  * Left navigation sidebar for ProfileSettings — avatar, display name, section links.
  * Membership tab is hidden for the owner role (owners have no subscription or role applications).
  */
-export default function ProfileNav({ formData, initials, activeTab, onSelectTab, userRole }) {
+export default function ProfileNav({ formData, completeness, initials, activeTab, onSelectTab, userRole }) {
   const role = (userRole || 'user').toLowerCase();
   const visibleTabs = ALL_TABS.filter(t => !t.hideForRoles || !t.hideForRoles.includes(role));
 
@@ -38,6 +38,7 @@ export default function ProfileNav({ formData, initials, activeTab, onSelectTab,
         <div style={{ textAlign: 'center' }}>
           <div className="profile-name user-name">{formData.firstName || formData.username} {formData.lastName || ''}</div>
           <div className="profile-handle">@{formData.username}</div>
+          <div className="profile-handle">Profile {completeness}% complete</div>
           <div style={{ marginTop: '6px' }}>
             <span
               style={{

@@ -1,11 +1,22 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
+import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
 import { MarkAllReadDto } from './dto/mark-all-read.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { NotificationsService } from './notifications.service';
+
+class CreateNotificationDto {
+  @IsInt()
+  @Min(1)
+  userId!: number;
+
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+}
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -26,6 +37,18 @@ export class NotificationsController {
       return [];
     }
     return this.service.findForUser(targetUserId);
+  }
+
+  @Post()
+  @Roles(AppRole.ADMIN, AppRole.OWNER)
+  create(@Body() payload: CreateNotificationDto) {
+    return this.service.create({ ...payload, type: 'system' });
+  }
+
+  @Delete(':id')
+  @Roles(AppRole.ADMIN, AppRole.COMMUNITY_MANAGER, AppRole.MODERATOR, AppRole.USER, AppRole.ORGANIZER, AppRole.OWNER)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.service.remove(id, userId);
   }
 
   @Patch('read-all')

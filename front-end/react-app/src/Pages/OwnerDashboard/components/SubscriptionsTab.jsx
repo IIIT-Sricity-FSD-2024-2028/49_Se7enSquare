@@ -1,10 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import {
+  subscriptionFilterChanged,
+  selectSubscriptionFilter,
+} from '../../../store/slices/ownerDashboardSlice';
 
 /**
  * Communities breakdown subcomponent with Active / Suspended / All tab filtering.
  */
 function CommunitiesDrilldown({ communities = [], users = [], loadError = '' }) {
-  const [filter, setFilter] = useState('active');
+  const dispatch = useAppDispatch();
+  const filter = useAppSelector(selectSubscriptionFilter);
+  const setFilter = (f) => dispatch(subscriptionFilterChanged(f));
+
+  useEffect(() => {
+    return () => {
+      dispatch(subscriptionFilterChanged('active'));
+    };
+  }, [dispatch]);
 
   const usersById = useMemo(
     () => new Map((Array.isArray(users) ? users : []).map((u) => [String(u.id), u])),
@@ -143,7 +156,15 @@ function CommunitiesDrilldown({ communities = [], users = [], loadError = '' }) 
  * Events overview subcomponent with Active / In Suspended Community / All tab filtering.
  */
 function EventsDrilldown({ events = [], communities = [], loadError = '' }) {
-  const [filter, setFilter] = useState('active');
+  const dispatch = useAppDispatch();
+  const filter = useAppSelector(selectSubscriptionFilter);
+  const setFilter = (f) => dispatch(subscriptionFilterChanged(f));
+
+  useEffect(() => {
+    return () => {
+      dispatch(subscriptionFilterChanged('active'));
+    };
+  }, [dispatch]);
 
   const commsById = useMemo(
     () => new Map((Array.isArray(communities) ? communities : []).map((c) => [String(c.id), c])),

@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { selectAdminStats } from '../store/selectors/adminSelectors';
+import {
+  adminUiActivePageChanged,
+  adminUiGlobalSearchChanged,
+  selectAdminUi,
+} from '../store/slices/ownerDashboardSlice';
 import AppShell from '../Components/platform/layout/AppShell';
 import useToast from '../Components/platform/hooks/useToast';
 import useAdminUsers from './AdminDashboard/hooks/useAdminUsers';
@@ -36,28 +41,49 @@ function toAdminUser(raw) {
 
 /**
  * Admin Dashboard Page Component
- * Orchestrates sub-hooks and subcomponents for platform administration:
- * Overview, Users, Communities, Escalated Reports, Events, Appeals, Applications, and Audit Log.
- * All admin data lives in the Redux store (adminUsers, adminCommunities, adminModeration, auditLog).
+ * Orchestrates sub-hooks and subcomponents for platform administration.
+ * All state is managed through Redux Toolkit with zero component useState.
  */
 export default function AdminDashboard() {
-  const adminUser = toAdminUser(useSelector(selectCurrentUser));
+  const dispatch = useAppDispatch();
+  const adminUser = toAdminUser(useAppSelector(selectCurrentUser));
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const [activePage, setActivePage] = useState(tabParam || 'overview');
-  const [globalSearch, setGlobalSearch] = useState('');
+
+  const { activePage, globalSearch } = useAppSelector(selectAdminUi);
+
+  const setActivePage = useCallback(
+    (page) => {
+      dispatch(adminUiActivePageChanged(page));
+    },
+    [dispatch]
+  );
+
+  const setGlobalSearch = useCallback(
+    (q) => {
+      dispatch(adminUiGlobalSearchChanged(q));
+    },
+    [dispatch]
+  );
 
   useEffect(() => {
     const currentTab = searchParams.get('tab') || 'overview';
     if (currentTab !== activePage) {
       setActivePage(currentTab);
     }
-  }, [searchParams, activePage]);
+  }, [searchParams, activePage, setActivePage]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(adminUiActivePageChanged('overview'));
+      dispatch(adminUiGlobalSearchChanged(''));
+    };
+  }, [dispatch]);
 
   const handleSelectPage = useCallback((pageId) => {
     setActivePage(pageId);
     setSearchParams({ tab: pageId });
-  }, [setSearchParams]);
+  }, [setActivePage, setSearchParams]);
 
   const { showToast } = useToast();
   const notify = useCallback((msg) => showToast('ℹ️', msg), [showToast]);
@@ -70,20 +96,12 @@ export default function AdminDashboard() {
     setUserSearch,
     userRoleFilter,
     setUserRoleFilter,
-    editingUser,
-    setEditingUser,
-    filteredUsers,
-    updateUserRole,
+    changeUserRole,
     suspendUser,
-    banUser,
     reinstateUser,
   } = useAdminUsers(notify);
 
-  const {
-    communities,
-    suspendCommunity,
-    reinstateCommunity,
-  } = useAdminCommunities(notify);
+  const { communities, suspendCommunity, reinstateCommunity } = useAdminCommunities(notify);
 
   const {
     reports,
@@ -97,56 +115,54 @@ export default function AdminDashboard() {
     handleModeratorApp,
   } = useAdminModeration(notify);
 
-  // Overview counts come from a memoized selector across the admin slices
-  const stats = useSelector(selectAdminStats);
-
-  const currentPage = PAGES.find((p) => p.id === activePage) || PAGES[0];
+  const counts = useAppSelector(selectAdminStats);
 
   return (
-    <AppShell
-      customHeader={
+    <AppShell activePage={activePage} onSelectPage={handleSelectPage}>
+      <div className="main">
         <AdminHeader
-          currentPage={currentPage}
-          globalSearch={globalSearch}
-          setGlobalSearch={setGlobalSearch}
           adminUser={adminUser}
+          globalSearch={globalSearch}
+          onGlobalSearchChange={setGlobalSearch}
         />
-      }
-    >
-      <AdminNav activePage={activePage} onSelectPage={handleSelectPage} />
 
-      <div className="admin-content-area">
+        <AdminNav
+          pages={PAGES}
+          activePage={activePage}
+          counts={counts}
+          onSelectPage={handleSelectPage}
+        />
+
         {activePage === 'overview' && (
           <OverviewTab
-            stats={stats}
-            auditLog={auditLog}
-            onNavigate={handleSelectPage}
+            counts={counts}
+            reports={reports}
+            appeals={appeals}
+            events={events}
+            communities={communities}
+            users={users}
+            onSelectPage={handleSelectPage}
           />
         )}
 
         {activePage === 'users' && (
           <UsersTab
+            users={users}
             userSearch={userSearch}
             setUserSearch={setUserSearch}
             userRoleFilter={userRoleFilter}
             setUserRoleFilter={setUserRoleFilter}
-            filteredUsers={filteredUsers}
-            editingUser={editingUser}
-            setEditingUser={setEditingUser}
-            updateUserRole={updateUserRole}
-            suspendUser={suspendUser}
-            banUser={banUser}
-            reinstateUser={reinstateUser}
-            adminUser={adminUser}
+            onChangeRole={changeUserRole}
+            onSuspendUser={suspendUser}
+            onReinstateUser={reinstateUser}
           />
         )}
 
         {activePage === 'communities' && (
           <CommunitiesTab
             communities={communities}
-            users={users}
-            suspendCommunity={suspendCommunity}
-            reinstateCommunity={reinstateCommunity}
+            onSuspend={suspendCommunity}
+            onReinstate={reinstateCommunity}
           />
         )}
 
@@ -159,22 +175,24 @@ export default function AdminDashboard() {
           />
         )}
 
-        {activePage === 'events-mgmt' && <EventsTab events={events} />}
+        {activePage === 'events' && (
+          <EventsTab events={events} communities={communities} showToast={notify} />
+        )}
 
         {activePage === 'appeals' && (
-          <AppealsTab appeals={appeals} onAppeal={handleAppeal} />
+          <AppealsTab appeals={appeals} onResolve={handleAppeal} />
         )}
 
         {activePage === 'applications' && (
           <ApplicationsTab
             organizerApps={organizerApps}
             moderatorApps={moderatorApps}
-            onOrganizerApp={handleOrganizerApp}
-            onModeratorApp={handleModeratorApp}
+            onOrganizerAction={handleOrganizerApp}
+            onModeratorAction={handleModeratorApp}
           />
         )}
 
-        {activePage === 'audit' && <AuditLogTab auditLog={auditLog} />}
+        {activePage === 'audit-log' && <AuditLogTab auditLog={auditLog} />}
       </div>
     </AppShell>
   );

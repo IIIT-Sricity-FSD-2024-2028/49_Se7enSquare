@@ -5,9 +5,8 @@ import { logout } from './authSlice';
 import { selectEvents } from './eventsSlice';
 
 /**
- * Organizer slice: the organizer's plan, earnings and registration counts.
- * The tournaments themselves live in the events slice; selectMyEvents picks this
- * organizer's ones out of it.
+ * Organizer slice: the organizer's plan, earnings, registration counts, and tournament filters.
+ * Tournaments themselves live in the events slice; selectMyEvents filters them.
  */
 
 const FREE_PROFILE = { plan: 'free', limits: { maxActiveTournaments: 2, maxParticipants: 64 } };
@@ -36,21 +35,43 @@ export const fetchOrganizerData = createAsyncThunk('organizer/fetch', async (_, 
   };
 });
 
-export const upgradeOrganizerPlan = createAsyncThunk('organizer/upgrade', async (_, { getState }) => {
+export const upgradeOrganizerPlan = createAsyncThunk('organizer/upgrade', async (_, { getState, rejectWithValue }) => {
   const userId = getState().auth.user?.id;
-  if (userId) await eventService.upgradeOrganizerPlan(userId, 'premium');
+  try {
+    if (userId) {
+      await eventService.upgradeOrganizerPlan(userId, 'premium');
+    }
+    return { plan: 'premium' };
+  } catch (err) {
+    return rejectWithValue({ message: err?.message || 'Failed to upgrade plan' });
+  }
 });
 
 // Puts a tournament in the Discover carousel for 7 days
-export const promoteEvent = createAsyncThunk('organizer/promote', async (eventId, { getState }) => {
-  await apiRequest('/featured-events', {
-    method: 'POST',
-    body: JSON.stringify({
-      eventId: Number(eventId),
-      userId: Number(getState().auth.user?.id),
-      durationDays: 7,
-    }),
-  });
+export const promoteEvent = createAsyncThunk('organizer/promote', async (eventId, { getState, rejectWithValue }) => {
+  try {
+    const data = await apiRequest('/featured-events', {
+      method: 'POST',
+      body: JSON.stringify({
+        eventId: Number(eventId),
+        userId: Number(getState().auth.user?.id),
+        durationDays: 7,
+      }),
+    });
+    return { eventId: Number(eventId), data };
+  } catch (err) {
+    return rejectWithValue({ message: err?.message || 'Failed to promote event' });
+  }
+});
+
+// Removes a tournament promotion from the Discover carousel
+export const unpromoteEvent = createAsyncThunk('organizer/unpromote', async (featuredOrEventId, { rejectWithValue }) => {
+  try {
+    await apiRequest(`/featured-events/${featuredOrEventId}`, { method: 'DELETE' });
+    return { id: featuredOrEventId };
+  } catch (err) {
+    return rejectWithValue({ message: err?.message || 'Failed to remove promotion' });
+  }
 });
 
 const initialState = {
@@ -58,12 +79,23 @@ const initialState = {
   earnings: '0',
   regCountByEvent: {},
   loading: true,
+  currentFilter: 'all',
+  upgrading: false,
+  promoting: false,
+  error: null,
 };
 
 const organizerSlice = createSlice({
   name: 'organizer',
   initialState,
-  reducers: {},
+  reducers: {
+    orgFilterChanged(state, action) {
+      state.currentFilter = action.payload;
+    },
+    resetOrganizerState() {
+      return initialState;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchOrganizerData.pending, (state) => {
@@ -79,18 +111,44 @@ const organizerSlice = createSlice({
         state.loading = false;
         state.profile = FREE_PROFILE;
       })
+      .addCase(upgradeOrganizerPlan.pending, (state) => {
+        state.upgrading = true;
+      })
       .addCase(upgradeOrganizerPlan.fulfilled, (state) => {
+        state.upgrading = false;
         state.profile = {
           ...state.profile,
           plan: 'premium',
           limits: { maxActiveTournaments: 'Unlimited', maxParticipants: 'Unlimited' },
         };
       })
+      .addCase(upgradeOrganizerPlan.rejected, (state, action) => {
+        state.upgrading = false;
+        state.error = action.payload?.message || 'Failed to upgrade';
+      })
+      .addCase(promoteEvent.pending, (state) => {
+        state.promoting = true;
+      })
+      .addCase(promoteEvent.fulfilled, (state) => {
+        state.promoting = false;
+      })
+      .addCase(promoteEvent.rejected, (state, action) => {
+        state.promoting = false;
+        state.error = action.payload?.message || 'Failed to promote';
+      })
+      .addCase(unpromoteEvent.fulfilled, (state) => {
+        state.promoting = false;
+      })
       .addCase(logout, () => initialState);
   },
 });
 
+export const { orgFilterChanged, resetOrganizerState } = organizerSlice.actions;
+
 export const selectOrganizer = (state) => state.organizer;
+export const selectOrganizerFilter = (state) => state.organizer.currentFilter;
+export const selectOrganizerProfile = (state) => state.organizer.profile;
+export const selectOrganizerEarnings = (state) => state.organizer.earnings;
 
 const selectAuthUser = (state) => state.auth.user;
 

@@ -1,68 +1,96 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import { eventService } from '../../Components/event-management/services/eventService';
-import { STORAGE_KEYS, EVENT_STATUSES } from '../../Components/event-management/utils/constants';
+import { EVENT_STATUSES } from '../../Components/event-management/utils/constants';
 import { logout } from './authSlice';
 
 /**
- * Events slice, shared by Events, Event Approval, Event Registrants, the Organizer
- * Dashboard and Discovery's event count:
- * - items: all events (with an offline fallback kept in localStorage)
- * - myRegistrations: the logged-in user's registrations
- * - registrants: the list shown on the Event Registrants page
+ * Events slice — Component (Event Management).
+ *
+ * Implements strict Redux Toolkit architecture:
+ * 1. 1:1 repository mapping to backend events and event-registrations
+ * 2. 4-CRUD operations: Create (createEvent, saveEvent), Read (fetchEvents, fetchEventById, fetchMyRegistrations, fetchRegistrants), Update (updateEvent, updateEventStatus), Delete (deleteEvent)
+ * 3. Strict DB-First Thunk lifecycle: state mutated in .fulfilled only
+ * 4. Zero localStorage domain fallbacks
+ * 5. All form, filter, and modal state in Redux
+ * 6. SWR cache window of 60 seconds (LIST_CACHE_MS)
+ * 7. Unmount cleanup actions
  */
+
+const LIST_CACHE_MS = 60_000;
 
 const sameId = (a, b) => Number(a) === Number(b) || String(a) === String(b);
 
-// Offline fallback (STORAGE_KEYS.EVENTS), used only when the backend cannot be reached
-const offline = {
-  read() {
+// [CRUD: READ ALL] with SWR cache
+export const fetchEvents = createAsyncThunk(
+  'events/fetch',
+  async (_, { rejectWithValue }) => {
     try {
-      const items = JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]');
-      return Array.isArray(items) ? items : [];
-    } catch {
-      return [];
+      const data = await eventService.getEvents();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to fetch events' });
     }
   },
-  write(items) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(items));
-    } catch { /* storage unavailable */ }
-  },
-  add(item) {
-    this.write([item, ...this.read()]);
-  },
-  update(id, patch) {
-    this.write(this.read().map((e) => (sameId(e.id, id) ? { ...e, ...patch } : e)));
-  },
-  remove(id) {
-    this.write(this.read().filter((e) => !sameId(e.id, id)));
-  },
-};
-
-// eventService sets err.status only when the backend answered. Then it refused
-// on purpose (plan limit, date clash, validation) and the reason must be shown.
-const serverAnswered = (err) => Boolean(err?.status);
-
-export const fetchEvents = createAsyncThunk('events/fetch', async () => {
-  try {
-    const data = await eventService.getEvents();
-    return { items: Array.isArray(data) ? data : [], offline: false };
-  } catch {
-    return { items: offline.read(), offline: true };
+  {
+    condition: (force = false, { getState }) => {
+      if (force) return true;
+      const { items, loading, lastFetched } = getState().events;
+      if (loading) return false;
+      const isFresh = lastFetched && Date.now() - lastFetched < LIST_CACHE_MS;
+      if (items.length > 0 && isFresh) return false;
+      return true;
+    },
   }
-});
+);
 
-// Approve / reject (Event Approval page)
+// [CRUD: READ ONE]
+export const fetchEventById = createAsyncThunk(
+  'events/fetchById',
+  async (id, { rejectWithValue }) => {
+    try {
+      const data = await eventService.getEventById(id);
+      return data;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || `Failed to fetch event #${id}` });
+    }
+  }
+);
+
+// [CRUD: CREATE]
+export const createEvent = createAsyncThunk(
+  'events/create',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const created = await eventService.createEvent(payload);
+      return created;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to create event' });
+    }
+  }
+);
+
+// [CRUD: UPDATE]
+export const updateEvent = createAsyncThunk(
+  'events/update',
+  async ({ id, payload }, { rejectWithValue }) => {
+    try {
+      const updated = await eventService.updateEvent(id, payload);
+      return updated;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to update event' });
+    }
+  }
+);
+
+// Approve / reject status update (Event Approval page)
 export const updateEventStatus = createAsyncThunk(
   'events/updateStatus',
   async ({ id, status }, { rejectWithValue }) => {
     try {
       await eventService.updateEvent(id, { status });
-      return { id, status, local: false };
+      return { id, status };
     } catch (err) {
-      if (serverAnswered(err)) return rejectWithValue({ message: err.message });
-      offline.update(id, { status });
-      return { id, status, local: true };
+      return rejectWithValue({ message: err?.message || 'Failed to update event status' });
     }
   }
 );
@@ -70,43 +98,39 @@ export const updateEventStatus = createAsyncThunk(
 // Create or edit a tournament (Organizer Dashboard). Pass id to edit.
 export const saveEvent = createAsyncThunk(
   'events/save',
-  async ({ id, payload }, { getState, rejectWithValue }) => {
+  async ({ id, payload }, { rejectWithValue }) => {
     try {
       const event = id
         ? await eventService.updateEvent(id, payload)
         : await eventService.createEvent(payload);
-      return { event, local: false };
+      return { event };
     } catch (err) {
-      if (serverAnswered(err)) return rejectWithValue({ message: err.message });
-      if (id) {
-        offline.update(id, payload);
-        const existing = getState().events.items.find((e) => sameId(e.id, id));
-        return { event: { ...existing, ...payload }, local: true };
-      }
-      const created = { ...payload, id: Date.now() };
-      offline.add(created);
-      return { event: created, local: true };
+      return rejectWithValue({ message: err?.message || 'Failed to save event' });
     }
   }
 );
 
-export const deleteEvent = createAsyncThunk('events/delete', async (id) => {
-  try {
-    await eventService.deleteEvent(id);
-  } catch {
-    offline.remove(id);
+// [CRUD: DELETE]
+export const deleteEvent = createAsyncThunk(
+  'events/delete',
+  async (id, { rejectWithValue }) => {
+    try {
+      await eventService.deleteEvent(id);
+      return id;
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to delete event' });
+    }
   }
-  return id;
-});
+);
 
 export const fetchMyRegistrations = createAsyncThunk(
   'events/fetchMyRegistrations',
-  async (_, { getState }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
       const data = await eventService.getRegistrations(getState().auth.user.id);
       return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
+    } catch (err) {
+      return rejectWithValue({ message: err?.message || 'Failed to fetch registrations' });
     }
   },
   { condition: (_, { getState }) => Boolean(getState().auth.user?.id) }
@@ -204,11 +228,10 @@ export const fetchRegistrants = createAsyncThunk(
       const data = await eventService.getEventRegistrants(eventId);
       return { title: data.eventTitle || 'Tournament', list: data.registrants || [] };
     } catch (err) {
-      const localEvent = offline.read().find((e) => sameId(e.id, eventId));
       let message = 'Could not load registrants.';
-      if (err?.status === 404) message = localEvent ? 'No registrants yet' : 'Event not found';
+      if (err?.status === 404) message = 'Event not found';
       else if (err?.status === 401 || err?.status === 403) message = "You don't have access to this tournament's registrants";
-      return rejectWithValue({ message, status: err?.status, title: localEvent?.title });
+      return rejectWithValue({ message, status: err?.status });
     }
   }
 );
@@ -223,47 +246,232 @@ const changeAttendees = (state, eventId, delta) => {
 
 const emptyRegistrants = { title: 'Event', list: [], loading: true, error: null };
 
+export const initialCreateEventForm = {
+  title: '',
+  description: '',
+  date: '',
+  time: '',
+  category: 'Tournament',
+  communityId: '',
+  maxParticipants: 100,
+  entryFee: 0,
+  prizePool: '',
+  rules: '',
+  banner: '',
+  status: 'pending',
+};
+
+export const initialRegistrationForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  inGameId: '',
+};
+
 const initialState = {
   items: [],
+  currentEvent: null,
   loading: true,
   loaded: false,
-  offline: false,
+  error: null,
+  lastFetched: null,
   myRegistrations: [],
   registrants: emptyRegistrants,
+  // Filters
+  categoryFilter: 'all',
+  statusFilter: 'all',
+  searchQuery: '',
+  // Create / Edit Tournament Form
+  createForm: { ...initialCreateEventForm },
+  createFormSubmitting: false,
+  createFormError: null,
+  // Registration Form
+  registrationForm: { ...initialRegistrationForm },
+  registrationSubmitting: false,
+  registrationError: null,
+  // Modal & Approval UI State
+  modalOpen: false,
+  modalMode: 'create',
+  selectedEventId: null,
+  approvalModal: {
+    open: false,
+    event: null,
+    action: null,
+  },
 };
 
 const eventsSlice = createSlice({
   name: 'events',
   initialState,
-  reducers: {},
+  reducers: {
+    // Filter reducers
+    setCategoryFilter(state, action) {
+      state.categoryFilter = action.payload;
+    },
+    setStatusFilter(state, action) {
+      state.statusFilter = action.payload;
+    },
+    setSearchQuery(state, action) {
+      state.searchQuery = action.payload;
+    },
+    resetEventsFilter(state) {
+      state.categoryFilter = 'all';
+      state.statusFilter = 'all';
+      state.searchQuery = '';
+    },
+    // Create form reducers
+    setCreateFormField(state, action) {
+      const { field, value } = action.payload;
+      state.createForm[field] = value;
+    },
+    setCreateForm(state, action) {
+      state.createForm = { ...state.createForm, ...action.payload };
+    },
+    resetCreateForm(state) {
+      state.createForm = { ...initialCreateEventForm };
+      state.createFormSubmitting = false;
+      state.createFormError = null;
+    },
+    // Registration form reducers
+    setRegistrationFormField(state, action) {
+      const { field, value } = action.payload;
+      state.registrationForm[field] = value;
+    },
+    setRegistrationForm(state, action) {
+      state.registrationForm = { ...state.registrationForm, ...action.payload };
+    },
+    resetRegistrationForm(state) {
+      state.registrationForm = { ...initialRegistrationForm };
+      state.registrationSubmitting = false;
+      state.registrationError = null;
+    },
+    // Modal management
+    openModal(state, action) {
+      state.modalOpen = true;
+      if (action.payload) {
+        state.modalMode = action.payload.mode || 'create';
+        if (action.payload.event) {
+          state.selectedEventId = action.payload.event.id;
+          state.currentEvent = action.payload.event;
+          state.createForm = { ...initialCreateEventForm, ...action.payload.event };
+        }
+      }
+    },
+    closeModal(state) {
+      state.modalOpen = false;
+      state.selectedEventId = null;
+      state.currentEvent = null;
+    },
+    // Approval modal
+    openApprovalModal(state, action) {
+      state.approvalModal = {
+        open: true,
+        event: action.payload.event,
+        action: action.payload.action || 'approve',
+      };
+    },
+    closeApprovalModal(state) {
+      state.approvalModal = {
+        open: false,
+        event: null,
+        action: null,
+      };
+    },
+    clearCurrentEvent(state) {
+      state.currentEvent = null;
+      state.selectedEventId = null;
+    },
+    resetEventsState() {
+      return initialState;
+    },
+  },
   extraReducers: (builder) => {
     builder
+      // fetchEvents
       .addCase(fetchEvents.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchEvents.fulfilled, (state, action) => {
         state.loading = false;
         state.loaded = true;
-        state.items = action.payload.items;
-        state.offline = action.payload.offline;
+        state.items = action.payload;
+        state.lastFetched = Date.now();
+        state.error = null;
       })
+      .addCase(fetchEvents.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || action.error?.message || 'Failed to fetch events';
+      })
+      // fetchEventById
+      .addCase(fetchEventById.fulfilled, (state, action) => {
+        state.currentEvent = action.payload;
+      })
+      // createEvent
+      .addCase(createEvent.pending, (state) => {
+        state.createFormSubmitting = true;
+        state.createFormError = null;
+      })
+      .addCase(createEvent.fulfilled, (state, action) => {
+        state.createFormSubmitting = false;
+        state.items.unshift(action.payload);
+        state.modalOpen = false;
+        state.createForm = { ...initialCreateEventForm };
+      })
+      .addCase(createEvent.rejected, (state, action) => {
+        state.createFormSubmitting = false;
+        state.createFormError = action.payload?.message || 'Failed to create event';
+      })
+      // updateEvent
+      .addCase(updateEvent.fulfilled, (state, action) => {
+        const index = state.items.findIndex((e) => sameId(e.id, action.payload.id));
+        if (index >= 0) state.items[index] = action.payload;
+        if (state.currentEvent && sameId(state.currentEvent.id, action.payload.id)) {
+          state.currentEvent = action.payload;
+        }
+      })
+      // updateEventStatus
       .addCase(updateEventStatus.fulfilled, (state, action) => {
         const ev = state.items.find((e) => sameId(e.id, action.payload.id));
         if (ev) ev.status = action.payload.status;
+        if (state.currentEvent && sameId(state.currentEvent.id, action.payload.id)) {
+          state.currentEvent.status = action.payload.status;
+        }
+        state.approvalModal = { open: false, event: null, action: null };
+      })
+      // saveEvent
+      .addCase(saveEvent.pending, (state) => {
+        state.createFormSubmitting = true;
+        state.createFormError = null;
       })
       .addCase(saveEvent.fulfilled, (state, action) => {
+        state.createFormSubmitting = false;
         const { event } = action.payload;
         const index = state.items.findIndex((e) => sameId(e.id, event.id));
         if (index >= 0) state.items[index] = event;
         else state.items.unshift(event);
+        state.modalOpen = false;
+        state.createForm = { ...initialCreateEventForm };
       })
+      .addCase(saveEvent.rejected, (state, action) => {
+        state.createFormSubmitting = false;
+        state.createFormError = action.payload?.message || 'Failed to save event';
+      })
+      // deleteEvent
       .addCase(deleteEvent.fulfilled, (state, action) => {
         state.items = state.items.filter((e) => !sameId(e.id, action.payload));
       })
+      // fetchMyRegistrations
       .addCase(fetchMyRegistrations.fulfilled, (state, action) => {
         state.myRegistrations = action.payload;
       })
+      // registerForEvent
+      .addCase(registerForEvent.pending, (state) => {
+        state.registrationSubmitting = true;
+        state.registrationError = null;
+      })
       .addCase(registerForEvent.fulfilled, (state, action) => {
+        state.registrationSubmitting = false;
         const exists = state.myRegistrations.some(
           (r) => sameId(r.id, action.payload.id) || sameId(r.eventId, action.payload.eventId)
         );
@@ -271,7 +479,14 @@ const eventsSlice = createSlice({
           state.myRegistrations.push(action.payload);
           changeAttendees(state, action.payload.eventId, 1);
         }
+        state.modalOpen = false;
+        state.registrationForm = { ...initialRegistrationForm };
       })
+      .addCase(registerForEvent.rejected, (state, action) => {
+        state.registrationSubmitting = false;
+        state.registrationError = action.payload?.message || 'Could not register.';
+      })
+      // cancelRegistration
       .addCase(cancelRegistration.fulfilled, (state, action) => {
         const { eventId, registrationId } = action.payload;
         state.myRegistrations = state.myRegistrations.filter(
@@ -283,6 +498,7 @@ const eventsSlice = createSlice({
           changeAttendees(state, eventId, -1);
         }
       })
+      // fetchRegistrants
       .addCase(fetchRegistrants.pending, (state) => {
         state.registrants = { ...emptyRegistrants };
       })
@@ -291,22 +507,51 @@ const eventsSlice = createSlice({
       })
       .addCase(fetchRegistrants.rejected, (state, action) => {
         state.registrants = {
-          title: action.payload?.title || 'Event',
+          title: 'Event',
           list: [],
           loading: false,
           error: action.payload?.message || 'Could not load registrants.',
         };
       })
-      .addCase(logout, (state) => {
-        state.myRegistrations = [];
-        state.registrants = emptyRegistrants;
-      });
+      .addCase(logout, () => initialState);
   },
 });
 
+export const {
+  setCategoryFilter,
+  setStatusFilter,
+  setSearchQuery,
+  resetEventsFilter,
+  setCreateFormField,
+  setCreateForm,
+  resetCreateForm,
+  setRegistrationFormField,
+  setRegistrationForm,
+  resetRegistrationForm,
+  openModal,
+  closeModal,
+  openApprovalModal,
+  closeApprovalModal,
+  clearCurrentEvent,
+  resetEventsState,
+} = eventsSlice.actions;
+
 export const selectEvents = (state) => state.events.items;
+export const selectCurrentEvent = (state) => state.events.currentEvent;
 export const selectEventsLoading = (state) => state.events.loading;
 export const selectEventsLoaded = (state) => state.events.loaded;
+export const selectEventsError = (state) => state.events.error;
+export const selectCategoryFilter = (state) => state.events.categoryFilter;
+export const selectStatusFilter = (state) => state.events.statusFilter;
+export const selectSearchQuery = (state) => state.events.searchQuery;
+export const selectCreateEventForm = (state) => state.events.createForm;
+export const selectRegistrationForm = (state) => state.events.registrationForm;
+export const selectEventModalState = (state) => ({
+  isOpen: state.events.modalOpen,
+  mode: state.events.modalMode,
+  selectedId: state.events.selectedEventId,
+});
+export const selectApprovalModalState = (state) => state.events.approvalModal;
 export const selectMyRegistrations = (state) => state.events.myRegistrations;
 export const selectRegistrants = (state) => state.events.registrants;
 

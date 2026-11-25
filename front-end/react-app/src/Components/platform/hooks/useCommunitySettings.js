@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { toastShown } from '../../../store/slices/uiSlice';
 import {
   fetchCommunitySettings,
@@ -12,34 +12,53 @@ import {
   channelDeleted,
   channelCreated,
   changesDiscarded,
+  setActiveTab as setActiveTabAction,
+  setModalOpen as setModalOpenAction,
+  setNewChName as setNewChNameAction,
+  setNewChType as setNewChTypeAction,
+  resetCommunitySettings,
   selectCommunitySettings,
+  selectSettingsActiveTab,
+  selectSettingsModalOpen,
+  selectNewChName,
+  selectNewChType,
 } from '../../../store/slices/communitySettingsSlice';
 
 /**
  * Custom hook connecting the Community Settings page to the Redux communitySettings slice.
- * The community draft, snapshot and dirty flag live in the store; the active tab and the
- * create-channel modal are page-only UI, so they stay in local state.
+ * All draft, tab, and channel creation modal states are fully managed by Redux.
  */
 export default function useCommunitySettings() {
   const { id: paramId } = useParams();
   const [searchParams] = useSearchParams();
   const communityId = paramId || searchParams.get('id') || '1';
 
-  const dispatch = useDispatch();
-  const { community, loading, isDirty } = useSelector(selectCommunitySettings);
+  const dispatch = useAppDispatch();
+  const { community, loading, isDirty } = useAppSelector(selectCommunitySettings);
 
-  const [activeTab, setActiveTab] = useState('basic');
+  // Redux UI State
+  const activeTab = useAppSelector(selectSettingsActiveTab);
+  const modalOpen = useAppSelector(selectSettingsModalOpen);
+  const newChName = useAppSelector(selectNewChName);
+  const newChType = useAppSelector(selectNewChType);
 
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newChName, setNewChName] = useState('');
-  const [newChType, setNewChType] = useState('Text');
+  const setActiveTab = useCallback((tab) => dispatch(setActiveTabAction(tab)), [dispatch]);
+  const setModalOpen = useCallback((open) => dispatch(setModalOpenAction(open)), [dispatch]);
+  const setNewChName = useCallback((name) => dispatch(setNewChNameAction(name)), [dispatch]);
+  const setNewChType = useCallback((type) => dispatch(setNewChTypeAction(type)), [dispatch]);
 
-  const showToast = (msg) => dispatch(toastShown({ msg }));
+  const showToast = useCallback((msg) => dispatch(toastShown({ msg })), [dispatch]);
 
   useEffect(() => {
     dispatch(fetchCommunitySettings(communityId));
   }, [dispatch, communityId]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      dispatch(resetCommunitySettings());
+    };
+  }, [dispatch]);
 
   const handleFieldChange = (field, value) => {
     dispatch(fieldChanged({ field, value }));
@@ -71,8 +90,8 @@ export default function useCommunitySettings() {
       return;
     }
     const action = dispatch(channelCreated({ name: newChName, type: newChType }));
-    setNewChName('');
-    setModalOpen(false);
+    dispatch(setNewChNameAction(''));
+    dispatch(setModalOpenAction(false));
     showToast(`Channel #${action.payload.name} created`);
   };
 
