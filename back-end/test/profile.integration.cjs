@@ -16,14 +16,14 @@ const { createAuthSession } = require(path.join(root, 'dist/common/utils/auth-se
 const { FileLoggerService } = require(path.join(root, 'dist/common/logger/file-logger.service'));
 
 async function run() {
-  const roles = ['user', 'user', 'moderator', 'admin', 'owner', 'organizer', 'community_manager', 'user'];
+  const roles = ['user', 'user', 'moderator', 'admin', 'owner', 'organizer', 'community_manager', 'user', 'user'];
   const users = roles.map((role, i) => ({ id: 9000 + i, username: `profile_${i}`, email: `profile_${i}@test.invalid`,
     firstName: `Profile${i}`, lastName: 'Test', bio: 'Profile test biography', phone: '1234567890', role, status: 'active',
     authProvider: i === 7 ? 'google' : 'local', ...(i === 7 ? { googleId: 'test-google-id' } : { passwordHash: hashPassword('Testpass123') }) }));
   db.users.push(...users);
   db.communities.push({ id: 9000, name: 'Profile tests', description: 'Profile privacy tests', tags: ['test'], ownerId: 9000, visibility: 'public' });
   db.communities.push({ id: 9002, name: 'Membership tests', description: 'Membership identity tests', tags: ['test'], ownerId: 9000, visibility: 'public' });
-  db.memberships.push(...[9000, 9001].map((userId, i) => ({ id: 9000 + i, userId, communityId: 9000, joinedAt: new Date().toISOString() })));
+  db.memberships.push(...[9000, 9001, 9008].map((userId, i) => ({ id: 9000 + i, userId, communityId: 9000, joinedAt: new Date().toISOString() })));
   db.messages.push({ id: 9000, channelId: 'general', communityId: 9000, authorId: 9000, authorName: 'Profile0', content: 'Message identity fixture', attachments: [], reactions: {}, pinned: false, createdAt: new Date().toISOString() });
   db.posts.push({ id: 9000, title: 'Profile activity', content: 'Test post', authorId: 9000, communityId: 9000 });
   db.reports.push({ id: 9000, reporterId: 9001, targetType: 'user', targetId: 9000, reason: 'Test report', status: 'pending' });

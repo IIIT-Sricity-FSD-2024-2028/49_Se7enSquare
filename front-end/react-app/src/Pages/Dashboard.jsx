@@ -32,6 +32,8 @@ export default function Dashboard() {
     handleSearch,
     markAllRead,
     loading,
+    communityError,
+    refresh,
   } = useDashboard();
 
   return (
@@ -63,6 +65,8 @@ export default function Dashboard() {
             communities={communities}
             createdCommunities={createdCommunities}
             loading={loading}
+            error={communityError}
+            onRetry={refresh}
             navigate={navigate}
           />
 
