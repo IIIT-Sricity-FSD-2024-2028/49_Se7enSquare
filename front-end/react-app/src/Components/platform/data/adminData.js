@@ -27,7 +27,8 @@ export const DEFAULT_COMMUNITIES = [];
 export const DEFAULT_ORGANIZER_APPS = [];
 export const DEFAULT_MODERATOR_APPS = [];
 
-export function getStatCards(stats) {
+export function getStatCards(stats = DEFAULT_STATS) {
+  stats = stats || DEFAULT_STATS;
   return [
     { id: 'stat-users',    label: 'Total Users',        val: stats.users || 0,             icon: '👥', bg: 'bg-purple', page: 'users' },
     { id: 'stat-comms',    label: 'Communities',        val: stats.comms || 0,             icon: '🏘️', bg: 'bg-cyan',   page: 'communities' },

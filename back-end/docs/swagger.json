@@ -105,6 +105,54 @@
         "tags": [
           "users"
         ]
+      },
+      "delete": {
+        "operationId": "UsersController_removeMe",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Numeric user ID of the requesting user.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET endpoints require any valid role. POST / PATCH / DELETE require admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "users"
+        ]
       }
     },
     "/api/users/{id}/role": {
@@ -736,6 +784,38 @@
         "tags": [
           "subscriptions"
         ]
+      },
+      "post": {
+        "operationId": "SubscriptionsController_create",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Any non-owner role may manage its own subscription.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscriptions"
+        ]
       }
     },
     "/api/subscriptions/status": {
@@ -1357,6 +1437,37 @@
           },
           "403": {
             "description": "Missing or invalid x-role header"
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/reports/mine": {
+      "get": {
+        "operationId": "ReportsController_findMine",
+        "parameters": [
+          {
+            "name": "x-role",
+            "in": "header",
+            "description": "RBAC role header. Accepted values: admin | community_manager | organizer | moderator | user. GET requires admin or moderator. POST requires any valid role. PATCH status requires admin or moderator. DELETE requires admin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "community_manager",
+                "organizer",
+                "moderator",
+                "user"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         },
         "tags": [
@@ -2177,6 +2288,29 @@
         ]
       }
     },
+    "/api/appeals/{id}": {
+      "delete": {
+        "operationId": "AppealsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "appeals"
+        ]
+      }
+    },
     "/api/appeals/{id}/status": {
       "patch": {
         "operationId": "AppealsController_updateStatus",
@@ -2388,6 +2522,29 @@
         ]
       }
     },
+    "/api/messages/{id}": {
+      "delete": {
+        "operationId": "MessagesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "messages"
+        ]
+      }
+    },
     "/api/messages/{id}/pin": {
       "patch": {
         "operationId": "MessagesController_pin",
@@ -2568,25 +2725,22 @@
         "tags": [
           "notifications"
         ]
-      }
-    },
-    "/api/notifications/read-all": {
-      "patch": {
-        "operationId": "NotificationsController_markAllRead",
-        "summary": "Mark every notification for a user as read",
+      },
+      "post": {
+        "operationId": "NotificationsController_create",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MarkAllReadDto"
+                "$ref": "#/components/schemas/CreateNotificationDto"
               }
             }
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": ""
           }
         },
@@ -2596,6 +2750,27 @@
       }
     },
     "/api/notifications/{id}": {
+      "delete": {
+        "operationId": "NotificationsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      },
       "patch": {
         "operationId": "NotificationsController_update",
         "summary": "Mark a single notification read/unread",
@@ -2615,6 +2790,31 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateNotificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "operationId": "NotificationsController_markAllRead",
+        "summary": "Mark every notification for a user as read",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkAllReadDto"
               }
             }
           }
@@ -3838,6 +4038,10 @@
           "role"
         ]
       },
+      "DeleteAccountDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CommunityDto": {
         "type": "object",
         "properties": {
@@ -4990,6 +5194,10 @@
             "example": 10
           }
         }
+      },
+      "CreateNotificationDto": {
+        "type": "object",
+        "properties": {}
       },
       "MarkAllReadDto": {
         "type": "object",
