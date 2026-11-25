@@ -6,7 +6,7 @@ import React from 'react';
  *  1. Communities the user has joined (joined by membership, not owned).
  *  2. Communities the user created / owns ("My Communities").
  */
-export default function JoinedCommunities({ communities, createdCommunities, loading, navigate }) {
+export default function JoinedCommunities({ communities, createdCommunities, loading, error, onRetry, navigate }) {
   // Deduplicate: if a community appears in both joined and created, only show it in "My Communities"
   const createdIds = new Set((createdCommunities || []).map((c) => String(c.id)));
   const joinedOnly = (communities || []).filter((c) => !createdIds.has(String(c.id)));
@@ -43,6 +43,17 @@ export default function JoinedCommunities({ communities, createdCommunities, loa
     return (
       <div style={{ color: 'var(--text-3,#666)', fontSize: '13px', padding: '20px 0' }}>
         Loading communities…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div role="alert" style={{ color: 'var(--text-3,#888)', fontSize: '13px', padding: '20px 0' }}>
+        <span>Could not load communities: {error}</span>{' '}
+        <button type="button" onClick={onRetry} style={{ color: 'var(--accent)', background: 'transparent', border: 0, cursor: 'pointer' }}>
+          Try again
+        </button>
       </div>
     );
   }

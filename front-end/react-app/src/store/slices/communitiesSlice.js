@@ -273,7 +273,9 @@ const emptyCurrent = {
 const initialState = {
   // Pure in-memory variables:
   all: [],
-  listLoading: true,
+  // Start idle so the first fetchCommunityList dispatch is not rejected by
+  // the thunk's in-flight guard before any request has actually started.
+  listLoading: false,
   listError: '',
   lastFetched: null,
   joinedIds: [],               // Zero localStorage: populated via fetchMyMemberships
@@ -352,6 +354,7 @@ const communitiesSlice = createSlice({
       // ── [READ ALL] Community List ────────────────────────────────────────
       .addCase(fetchCommunityList.pending, (state) => {
         state.listLoading = true;
+        state.listError = '';
       })
       .addCase(fetchCommunityList.fulfilled, (state, action) => {
         state.listLoading = false;

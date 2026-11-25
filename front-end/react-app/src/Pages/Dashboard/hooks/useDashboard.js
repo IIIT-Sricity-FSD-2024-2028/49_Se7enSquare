@@ -9,6 +9,7 @@ import {
   selectJoinedCommunities,
   selectOwnedCommunities,
   selectCommunityListLoading,
+  selectCommunityListError,
 } from '../../../store/slices/communitiesSlice';
 import { fetchEvents, selectApprovedEvents } from '../../../store/slices/eventsSlice';
 import {
@@ -49,6 +50,7 @@ export default function useDashboard() {
   const communities = useAppSelector(selectJoinedCommunities).slice(0, 8);
   const createdCommunities = useAppSelector(selectOwnedCommunities).slice(0, 8);
   const loading = useAppSelector(selectCommunityListLoading);
+  const communityError = useAppSelector(selectCommunityListError);
   const approvedEvents = useAppSelector(selectApprovedEvents);
   const notifications = useAppSelector(selectRecentNotifications);
   const unreadCount = useAppSelector(selectUnreadNotifications).length;
@@ -112,6 +114,7 @@ export default function useDashboard() {
     handleSearch,
     markAllRead,
     loading,
+    communityError,
     refresh: fetchData,
   };
 }

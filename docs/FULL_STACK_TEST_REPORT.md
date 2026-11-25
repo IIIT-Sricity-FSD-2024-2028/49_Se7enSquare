@@ -19,7 +19,7 @@ Authentication now uses a random, opaque, server-validated session. Login sets a
 | Backend build | PASS | Nest build, also run by integration and E2E scripts |
 | Frontend production build | PASS | Vite build; output includes a 734.86 kB JavaScript chunk (200.13 kB gzip), above Vite's 500 kB advisory threshold |
 | Backend HTTP integration | PASS | 128 requests/assertion checks against real Nest controllers and guards, using a temporary database |
-| Browser E2E | PASS | 12 assertions: unauthenticated admin route guard, admin login/dashboard, Users tab render, refresh/session restore, logout and server-side revocation |
+| Browser E2E | PASS | 10 explicit assertions plus route/state waits: admin route/login/dashboard/Users tab/refresh/logout, and a regular user's joined-community dashboard load |
 | Dependency audit (frontend) | PASS | `npm audit`: 0 advisories |
 | Dependency audit (backend) | FAIL | `npm audit`: 26 advisories remain (12 high, 11 moderate, 3 low; 0 critical). Safe automatic updates were applied. Remaining fixes require NestJS major-version upgrades; those were not forced because compatibility and regression risk need a planned migration. |
 | Git whitespace check | PASS | `git diff --check` |
@@ -28,7 +28,7 @@ Builds and lint establish compile and static quality only; they do not prove all
 
 ## Pages, roles, API and state exercised
 
-The browser test exercised login, protected-route behavior, admin overview, the admin Users tab, cookie session restoration after refresh and logout. The integration suite exercises regular user, moderator, admin, owner, organizer, community manager and Google-only test fixtures. The admin exception screenshot (`Cannot read properties of undefined (reading 'users')`) does not recur in the browser run; the dashboard and user table render from API-backed state.
+The browser test exercises login, protected-route behavior, admin overview, the admin Users tab, cookie session restoration after refresh and logout. It also verifies a regular user gets past the communities loading state and sees a joined community from the API. The integration suite exercises regular user, moderator, admin, owner, organizer, community manager and Google-only test fixtures. The admin exception screenshot (`Cannot read properties of undefined (reading 'users')`) does not recur in the browser run; the dashboard and user table render from API-backed state.
 
 The backend contains 102 HTTP handler decorators across 25 controller files. The exercised route groups include `/auth`, `/users`, `/communities`, `/memberships`, `/messages`, `/uploads`, `/organisers` and `/moderator-certification`; checks include invalid/duplicate registration, password validation and rotation, cookie login/restore, role mismatch, session revocation, profile privacy and validation, database-file persistence, ownership checks and spoofed author/reaction IDs. This is a focused regression/security suite, not a claim that every one of the 102 handlers was exercised.
 
@@ -39,6 +39,7 @@ Redux session state was checked through login, restore, refresh and logout in th
 - **Unauthenticated identity spoofing:** `x-user-id` could previously select an account. Protected requests now require a valid opaque session; optional identity headers must match it and roles are loaded from the user record.
 - **Client-side token/session behavior:** login and password change now issue HttpOnly cookies, password change revokes earlier sessions, logout revokes the active session, and Redux restores the current user from `/users/me` after a refresh. Cookie requests include credentials. Production login no longer advertises development personas.
 - **Admin dashboard session/render stability:** the app waits for session restoration before rendering protected routes; the admin dashboard's existing safe data normalization is covered by browser regression checks.
+- **Dashboard communities stuck at “Loading communities…”:** the Redux slice initialized `listLoading` to `true`, and the fetch thunk's duplicate-request guard refused to run when that flag was true. The first fetch was therefore skipped forever. The slice now starts idle; real failures clear the spinner, show an error and provide a retry action. Playwright covers the regular-user dashboard through the resolved community render.
 - **Community and membership IDOR:** community creation now assigns ownership from the authenticated account; only the owner or admin can edit/delete. Membership creation binds to the authenticated account; user membership lookup is self-scoped, and removal is limited to the member, community owner or admin.
 - **Message identity spoofing:** message authors and reactions use the session identity; non-owners cannot pin or attach files to another user's message unless they have moderator, community-manager or admin role.
 - **Profile validation:** a provided empty bio no longer bypasses the configured minimum length.
@@ -50,6 +51,7 @@ Redux session state was checked through login, restore, refresh and logout in th
 
 | Feature | User Role | Test Scenario | Expected Result | Actual Result | Status |
 |---|---|---|---|---|---|
+| Dashboard community loading | Regular user | Sign in and wait for joined-community data | Initial fetch runs and loading state ends | “Profile tests” rendered for the joined user; no loading/error state remained | PASS |
 | Admin protected route | Anonymous | Open `/admin-dashboard` directly | Redirect to login | Redirected to `/login` | PASS |
 | Admin dashboard | System Administrator | Login and render dashboard | Overview and admin navigation render without runtime exception | Rendered; no page runtime errors | PASS |
 | User management | System Administrator | Open Users tab | User table renders | Table rendered from API state | PASS |
@@ -104,5 +106,6 @@ Reviewable implementation commits:
 - `e416704` — cookie session restore and logout in the frontend
 - `0ea6565` — compatible frontend dependency security updates
 - `fd2de4e` — RBAC and full-stack test report
+- `3696859` — initial dashboard community fetch and retry state
 
-The branch was pushed to the authorized organization repository. Pull request: [#5 — Full-Stack Security and Regression Fixes](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/5). It targets `main` and remains open for review; it was not merged automatically.
+The branch was pushed to the authorized organization repository. [PR #5 — Full-Stack Security and Regression Fixes](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/5) was merged by repository activity at merge commit `203c6b2`; I did not merge it. The dashboard fix was pushed afterward and is in [PR #6 — Fix dashboard community loading](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/6), targeting `main` and awaiting review.

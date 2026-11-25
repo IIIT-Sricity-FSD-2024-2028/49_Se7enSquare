@@ -68,7 +68,24 @@ async function run() {
     await page.waitForURL(`${base}/login`);
     const afterLogout = await page.context().request.get(`${base}/api/users/me`);
     assert.equal(afterLogout.status(), 401, 'logout should revoke the server session');
-    console.log('Admin E2E: 12 assertions passed (route guard, login, admin dashboard, user tab, refresh session, logout).');
+
+    const userPage = await browser.newPage();
+    userPage.on('response', response => {
+      if (response.status() >= 400 && !response.url().endsWith('/api/users/me')) {
+        console.log(`User dashboard request returned ${response.status()}: ${response.url()}`);
+      }
+    });
+    await userPage.goto(`${base}/login`);
+    await userPage.locator('#login-email').fill('profile_8');
+    await userPage.locator('#login-password').fill('Testpass123');
+    await userPage.locator('#login-role').selectOption('user');
+    await userPage.locator('#login-btn').click();
+    await userPage.waitForURL(`${base}/dashboard`, { timeout: 8000 });
+    await userPage.getByText('Profile tests', { exact: true }).waitFor({ timeout: 8000 });
+    await userPage.getByText('Loading communities…').waitFor({ state: 'detached', timeout: 8000 });
+    assert(await userPage.getByText('Profile tests', { exact: true }).count() > 0, "dashboard should render the user's joined community");
+    assert.equal(await userPage.getByRole('alert').count(), 0, 'community request should not leave an error state');
+    console.log('Browser E2E passed: protected admin session and regular-user community loading/rendering.');
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');
