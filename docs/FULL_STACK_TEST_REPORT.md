@@ -106,5 +106,6 @@ Reviewable implementation commits:
 - `e416704` — cookie session restore and logout in the frontend
 - `0ea6565` — compatible frontend dependency security updates
 - `fd2de4e` — RBAC and full-stack test report
+- `3696859` — initial dashboard community fetch and retry state
 
-The branch was pushed to the authorized organization repository. Pull request: [#5 — Full-Stack Security and Regression Fixes](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/5). It targets `main` and remains open for review; it was not merged automatically.
+The branch was pushed to the authorized organization repository. [PR #5 — Full-Stack Security and Regression Fixes](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/5) was merged by repository activity at merge commit `203c6b2`; I did not merge it. The dashboard fix was pushed afterward and is in [PR #6 — Fix dashboard community loading](https://github.com/IIIT-Sricity-FSD-2024-2028/49_Se7enSquare/pull/6), targeting `main` and awaiting review.
