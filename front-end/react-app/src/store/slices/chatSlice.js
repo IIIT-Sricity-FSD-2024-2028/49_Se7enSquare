@@ -29,6 +29,7 @@ function toMessage(m) {
     initials: authorName.slice(0, 2).toUpperCase(),
     color: '#6366f1',
     text: m.content || '',
+    attachments: Array.isArray(m.attachments) ? m.attachments : [],
     time: timeOf(m.createdAt),
     reactions: toReactionList(m.reactions),
   };
@@ -76,7 +77,7 @@ export const fetchChatMessages = createAsyncThunk('chat/fetchMessages', async ({
 
 export const sendChatMessage = createAsyncThunk(
   'chat/send',
-  async ({ communityId, channelId, content, authorName }, { getState }) => {
+  async ({ communityId, channelId, content, authorName, attachments = [] }, { getState }) => {
     const userId = getState().auth.user?.id;
     const created = await apiRequest('/messages', {
       method: 'POST',
@@ -86,12 +87,20 @@ export const sendChatMessage = createAsyncThunk(
         communityId: Number(communityId),
         authorId: userId ? Number(userId) : undefined,
         authorName,
+        attachments,
       }),
     });
     return toMessage(created);
   },
   { condition: (_, { getState }) => !getState().chat.sendingMessage }
 );
+
+export const uploadChatAttachment = createAsyncThunk('chat/uploadAttachment', async (file) => {
+  const body = new FormData();
+  body.append('file', file);
+  const uploaded = await apiRequest('/uploads', { method: 'POST', body });
+  return { url: uploaded.fileUrl, name: uploaded.originalName };
+});
 
 // The backend toggles (second click removes your reaction) and returns the
 // updated message, so the real counts are shown instead of guessing "+1".
@@ -128,6 +137,10 @@ const initialState = {
   showSearch: false,
   showPinned: false,
   showMembers: true,
+  showQuickActions: false,
+  pendingAttachments: [],
+  uploadingAttachment: false,
+  uploadRequestId: null,
   muted: false,
   deafened: false,
   sendRequestId: null,
@@ -154,6 +167,18 @@ const chatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(uploadChatAttachment.pending, (state, action) => { state.uploadingAttachment = true; state.uploadRequestId = action.meta.requestId; })
+      .addCase(uploadChatAttachment.fulfilled, (state, action) => {
+        if (state.uploadRequestId !== action.meta.requestId) return;
+        state.uploadRequestId = null;
+        state.uploadingAttachment = false;
+        state.pendingAttachments.push(action.payload);
+      })
+      .addCase(uploadChatAttachment.rejected, (state, action) => {
+        if (state.uploadRequestId !== action.meta.requestId) return;
+        state.uploadingAttachment = false;
+        state.uploadRequestId = null;
+      })
       .addCase(fetchChatChannels.pending, (state, action) => {
         state.channelsRequestId = action.meta.requestId;
         state.channelsLoading = true;
@@ -205,7 +230,8 @@ const chatSlice = createSlice({
         if (state.sendRequestId !== action.meta.requestId) return;
         state.sendingMessage = false;
         state.sendRequestId = null;
-        const { communityId, channelId } = action.meta.arg;
+        const { communityId, channelId, attachments = [] } = action.meta.arg;
+        state.pendingAttachments = state.pendingAttachments.filter(file => !attachments.includes(file.url));
         if (state.messageScope?.communityId === communityId &&
             state.messageScope?.channelId === channelId &&
             !state.messages.some(({ id }) => id === action.payload.id)) {

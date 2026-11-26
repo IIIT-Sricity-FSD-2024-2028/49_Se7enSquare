@@ -9,6 +9,7 @@ import {
   fetchChatMembers,
   fetchChatMessages,
   sendChatMessage,
+  uploadChatAttachment,
   toggleChatReaction,
   togglePinMessage,
   deleteChatMessage,
@@ -43,16 +44,16 @@ export default function useChat() {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
 
-  const communityId    = searchParams.get('community') || '';
-  const communityName  = decodeURIComponent(searchParams.get('cname')   || 'Community Chat');
-  const initialChannel = decodeURIComponent(searchParams.get('channel') || 'general');
+  const communityId    = searchParams.get('community') || searchParams.get('communityId') || '';
+  const communityName  = (searchParams.get('cname') || 'Community Chat');
+  const initialChannel = (searchParams.get('channel') || 'general');
 
   const messagesEndRef = useRef(null);
   const user = toChatUser(useAppSelector(selectCurrentUser));
   const {
     channels, channelsLoading, members, messages, selectedChannelId, sendingMessage,
     msgInput, channelSearch, msgSearchQuery, replyTo, showEmojiPicker, showSearch,
-    showPinned, showMembers, muted, deafened,
+    showPinned, showMembers, muted, deafened, showQuickActions, pendingAttachments, uploadingAttachment,
   } = useAppSelector(selectChat);
   const selectedChannel = channels.find((channel) => channel.id === selectedChannelId) ||
     channels.find((channel) => channel.name === initialChannel || channel.id === initialChannel) ||
@@ -103,9 +104,10 @@ export default function useChat() {
     const text = msgInput.trim();
     // Every message must belong to a real community. Before, a missing
     // communityId fell back to community 1, so messages ended up there.
-    if (!text || !activeChannel?.id || !communityId || sendingMessage) return;
+    if ((!text && !pendingAttachments.length) || !activeChannel?.id || !communityId || sendingMessage || uploadingAttachment) return;
 
-    const content = replyTo ? `↩️ ${replyTo}: ${text}` : text;
+    const messageText = text || pendingAttachments.map(file => file.name).join(', ');
+    const content = replyTo ? `↩️ ${replyTo}: ${messageText}` : messageText;
     setMsgInput('');
     setReplyTo(null);
 
@@ -114,6 +116,7 @@ export default function useChat() {
         communityId,
         channelId: activeChannel.id,
         content,
+        attachments: pendingAttachments.map(file => file.url),
         authorName: user.username || user.firstName || 'User',
       })).unwrap();
     } catch (err) {
@@ -163,6 +166,11 @@ export default function useChat() {
     showMembers, setShowMembers,
     muted, setMuted,
     deafened, setDeafened,
+    showQuickActions,
+    setShowQuickActions: value => setField('showQuickActions', value),
+    pendingAttachments, uploadingAttachment,
+    attachFile: file => dispatch(uploadChatAttachment(file)),
+    removeAttachment: url => dispatch(chatUiChanged({ pendingAttachments: pendingAttachments.filter(file => file.url !== url) })),
     // Actions
     sendMessage, toggleReaction, togglePin, removeMessage,
     EMOJIS,

@@ -16,6 +16,7 @@ import {
   openApprovalModal,
   closeApprovalModal,
   selectEventsLoading,
+  selectEventsError,
   selectApprovalModalState,
 } from '../../store/slices/eventsSlice';
 import { selectEventsByStatus } from '../../store/selectors/eventSelectors';
@@ -28,6 +29,7 @@ import EventDetailModal from './EventDetailModal';
 export default function EventApproval() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const error = useAppSelector(selectEventsError);
   const loading = useAppSelector(selectEventsLoading);
   const { pending: pendingList, approved: approvedList, rejected: rejectedList } = useAppSelector(selectEventsByStatus);
   const communities = useAppSelector(selectAllCommunities);
@@ -83,6 +85,7 @@ export default function EventApproval() {
           </button>
         </header>
 
+        {error && <div role="alert"><p>{error}</p><button onClick={() => dispatch(fetchEvents(true))} disabled={loading}>Retry events</button></div>}
         <SummaryBar
           pendingCount={pendingList.length}
           approvedCount={approvedList.length}

@@ -99,6 +99,14 @@ export default function Chat() {
           {/* Message Input pinned at bottom */}
           <MessageInput
             activeChannel={c.activeChannel}
+            pendingAttachments={c.pendingAttachments}
+            uploadingAttachment={c.uploadingAttachment}
+            onAttachFile={c.attachFile}
+            onRemoveAttachment={c.removeAttachment}
+            showQuickActions={c.showQuickActions}
+            onToggleQuickActions={() => c.setShowQuickActions(!c.showQuickActions)}
+            onSearch={() => { c.setShowSearch(true); c.setShowQuickActions(false); }}
+            onPinned={() => { c.setShowPinned(true); c.setShowQuickActions(false); }}
             msgInput={c.msgInput}
             onMsgInputChange={c.setMsgInput}
             onSendMessage={c.sendMessage}

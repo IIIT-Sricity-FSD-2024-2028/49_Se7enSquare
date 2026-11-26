@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 /**
  * Message input area — formatting toolbar, emoji picker, quick actions,
@@ -6,6 +6,8 @@ import React from 'react';
  */
 export default function MessageInput({
   activeChannel,
+  pendingAttachments = [], uploadingAttachment, onAttachFile, onRemoveAttachment,
+  showQuickActions, onToggleQuickActions, onSearch, onPinned,
   msgInput, onMsgInputChange,
   onSendMessage,
   replyTo, onCancelReply,
@@ -13,6 +15,7 @@ export default function MessageInput({
   EMOJIS, onAppendEmoji,
   onFormatBold, onFormatItalic, onFormatCode,
 }) {
+  const fileInput = useRef(null);
   return (
     <div className="input-area">
       <div className="input-wrap">
@@ -78,9 +81,19 @@ export default function MessageInput({
           </div>
         )}
 
+        {showQuickActions && <div className="input-toolbar">
+          <button type="button" onClick={onSearch}>Search messages</button>
+          <button type="button" onClick={onPinned}>Pinned messages</button>
+        </div>}
+        {pendingAttachments.map(file => <div key={file.url}>
+          {file.name} <button type="button" aria-label={`Remove ${file.name}`} onClick={() => onRemoveAttachment(file.url)}>×</button>
+        </div>)}
+        <input ref={fileInput} type="file" hidden aria-label="Chat attachment"
+          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain"
+          onChange={event => { const file = event.target.files?.[0]; if (file) onAttachFile(file); event.target.value = ''; }} />
         <div className="input-row">
-          <button type="button" className="tb-btn" title="Attach File">➕</button>
-          <button type="button" className="tb-btn" title="Quick Action">⚡</button>
+          <button type="button" className="tb-btn" title="Attach File" disabled={uploadingAttachment} onClick={() => fileInput.current?.click()}>➕</button>
+          <button type="button" className="tb-btn" title="Quick Action" onClick={onToggleQuickActions}>⚡</button>
           <textarea
             id="msgInput"
             placeholder={`Message #${activeChannel?.name || 'general'}`}

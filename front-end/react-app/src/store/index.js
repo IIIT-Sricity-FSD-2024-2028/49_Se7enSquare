@@ -18,6 +18,7 @@ import ownerDashboardReducer from './slices/ownerDashboardSlice';
 import profileReducer from './slices/profileSlice';
 import appealReducer from './slices/appealSlice';
 import chatReducer from './slices/chatSlice';
+import { sessionMiddleware } from './sessionMiddleware';
 import { listenerMiddleware } from './listenerMiddleware';
 
 /**
@@ -48,7 +49,7 @@ export const store = configureStore({
     chat: chatReducer,
   },
   // The listener middleware goes first, as recommended by Redux Toolkit
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+  middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(sessionMiddleware, listenerMiddleware.middleware),
 });
 
 configureSession({

@@ -14,6 +14,7 @@ import {
   setCreateForm,
   resetCreateForm,
   selectEventsLoading,
+  selectEventsError,
   selectCreateEventForm,
   selectEventModalState,
 } from '../../store/slices/eventsSlice';
@@ -53,7 +54,10 @@ export function useOrganizerData() {
   const allCommunities = useAppSelector(selectAllCommunities);
   const myEvents = useAppSelector(selectMyEvents);
   const eventsLoading = useAppSelector(selectEventsLoading);
-  const { profile: organizerProfile, earnings, regCountByEvent, loading: organizerLoading } = useAppSelector(selectOrganizer);
+  const { profile: organizerProfile, earnings, regCountByEvent, loading: organizerLoading, error: organizerError } = useAppSelector(selectOrganizer);
+  const eventsError = useAppSelector(selectEventsError);
+  const error = organizerError || eventsError;
+  const retry = () => { dispatch(fetchEvents(true)); dispatch(fetchOrganizerData()); };
   const loading = eventsLoading || organizerLoading;
 
   // Filter from Redux
@@ -112,8 +116,10 @@ export function useOrganizerData() {
 
   const handleDeleteEvent = async (id) => {
     if (!window.confirm('Delete this tournament? This cannot be undone.')) return;
-    await dispatch(deleteEvent(id));
-    showToast('🗑️ Tournament deleted');
+    try {
+      await dispatch(deleteEvent(id)).unwrap();
+      showToast('🗑️ Tournament deleted');
+    } catch (error) { showToast(error.message || 'Could not delete tournament'); }
   };
 
   const openCreateModal = () => {
@@ -176,7 +182,10 @@ export function useOrganizerData() {
     }
 
     const payload = {
-      ...formData,
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      date: formData.date,
+      time: formData.time,
       status: finalStatus,
       communityId: Number(formData.communityId),
       maxAttendees: Number(formData.maxAttendees) || 100,
@@ -220,6 +229,8 @@ export function useOrganizerData() {
     organizerProfile,
     earnings,
     loading,
+    error,
+    retry,
     modalOpen,
     setModalOpen,
     modalMode,

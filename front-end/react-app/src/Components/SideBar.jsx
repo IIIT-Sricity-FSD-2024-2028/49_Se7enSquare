@@ -273,9 +273,9 @@ export default function SideBar() {
         {!collapsed && (
           <button
             className="sb-profile__logout"
-            onClick={() => {
-              dispatch(logoutUser());
-              navigate('/login');
+            onClick={async () => {
+              const result = await dispatch(logoutUser());
+              if (logoutUser.fulfilled.match(result)) navigate('/login');
             }}
             aria-label="Log out"
             title="Log out"

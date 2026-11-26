@@ -27,6 +27,7 @@ const SILENT_THUNKS = new Set([
   'communities/join',
   'communities/leave',
   'auth/loginUser',
+  'auth/restoreSession',
   'auth/registerUser',
   'events/register',
   'events/cancelRegistration',

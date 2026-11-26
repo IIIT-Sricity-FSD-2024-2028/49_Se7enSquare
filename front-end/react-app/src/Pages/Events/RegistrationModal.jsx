@@ -14,6 +14,7 @@ export default function RegistrationModal({
   onSubmit,
 }) {
   const dispatch = useAppDispatch();
+  const submitting = useAppSelector(state => state.events.registrationSubmitting);
   const formData = useAppSelector(selectRegistrationForm);
 
   // Unmount cleanup: reset form on unmount or close
@@ -34,6 +35,7 @@ export default function RegistrationModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (!formData.fullName.trim() || !formData.email.trim() || !formData.inGameId.trim()) {
       return;
     }
@@ -133,6 +135,7 @@ export default function RegistrationModal({
               Cancel
             </button>
             <button
+              disabled={submitting}
               type="submit"
               className="btn-publish"
             >

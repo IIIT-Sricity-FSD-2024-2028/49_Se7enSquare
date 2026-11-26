@@ -33,11 +33,10 @@ export const fetchEvents = createAsyncThunk(
   },
   {
     condition: (force = false, { getState }) => {
-      if (force) return true;
-      const { items, loading, lastFetched } = getState().events;
+      const { loading, lastFetched } = getState().events;
       if (loading) return false;
       const isFresh = lastFetched && Date.now() - lastFetched < LIST_CACHE_MS;
-      if (items.length > 0 && isFresh) return false;
+      if (!force && isFresh) return false;
       return true;
     },
   }
@@ -87,8 +86,7 @@ export const updateEventStatus = createAsyncThunk(
   'events/updateStatus',
   async ({ id, status }, { rejectWithValue }) => {
     try {
-      await eventService.updateEvent(id, { status });
-      return { id, status };
+      return await eventService.updateEvent(id, { status });
     } catch (err) {
       return rejectWithValue({ message: err?.message || 'Failed to update event status' });
     }
@@ -242,6 +240,10 @@ const changeAttendees = (state, eventId, delta) => {
   const next = Math.max(0, Number(ev.attendees ?? ev.registered ?? 0) + delta);
   ev.attendees = next;
   ev.registered = next;
+  if (state.currentEvent && sameId(state.currentEvent.id, eventId)) {
+    state.currentEvent.attendees = next;
+    state.currentEvent.registered = next;
+  }
 };
 
 const emptyRegistrants = { title: 'Event', list: [], loading: true, error: null };
@@ -271,7 +273,7 @@ export const initialRegistrationForm = {
 const initialState = {
   items: [],
   currentEvent: null,
-  loading: true,
+  loading: false,
   loaded: false,
   error: null,
   lastFetched: null,
@@ -433,9 +435,9 @@ const eventsSlice = createSlice({
       // updateEventStatus
       .addCase(updateEventStatus.fulfilled, (state, action) => {
         const ev = state.items.find((e) => sameId(e.id, action.payload.id));
-        if (ev) ev.status = action.payload.status;
+        if (ev) Object.assign(ev, action.payload);
         if (state.currentEvent && sameId(state.currentEvent.id, action.payload.id)) {
-          state.currentEvent.status = action.payload.status;
+          state.currentEvent = action.payload;
         }
         state.approvalModal = { open: false, event: null, action: null };
       })
@@ -460,6 +462,11 @@ const eventsSlice = createSlice({
       // deleteEvent
       .addCase(deleteEvent.fulfilled, (state, action) => {
         state.items = state.items.filter((e) => !sameId(e.id, action.payload));
+        state.myRegistrations = state.myRegistrations.filter(r => !sameId(r.eventId, action.payload));
+        if (state.currentEvent && sameId(state.currentEvent.id, action.payload)) {
+          state.currentEvent = null;
+          state.modalOpen = false;
+        }
       })
       // fetchMyRegistrations
       .addCase(fetchMyRegistrations.fulfilled, (state, action) => {
@@ -546,11 +553,10 @@ export const selectStatusFilter = (state) => state.events.statusFilter;
 export const selectSearchQuery = (state) => state.events.searchQuery;
 export const selectCreateEventForm = (state) => state.events.createForm;
 export const selectRegistrationForm = (state) => state.events.registrationForm;
-export const selectEventModalState = (state) => ({
-  isOpen: state.events.modalOpen,
-  mode: state.events.modalMode,
-  selectedId: state.events.selectedEventId,
-});
+export const selectEventModalState = createSelector(
+  [(state) => state.events.modalOpen, (state) => state.events.modalMode, (state) => state.events.selectedEventId],
+  (isOpen, mode, selectedId) => ({ isOpen, mode, selectedId })
+);
 export const selectApprovalModalState = (state) => state.events.approvalModal;
 export const selectMyRegistrations = (state) => state.events.myRegistrations;
 export const selectRegistrants = (state) => state.events.registrants;

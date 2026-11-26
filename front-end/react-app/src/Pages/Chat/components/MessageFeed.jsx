@@ -71,6 +71,9 @@ export default function MessageFeed({
               </div>
 
               <div className="msg-text">{msg.text}</div>
+              {msg.attachments?.filter(url => typeof url === 'string' && /^\/uploads\/[a-zA-Z0-9_.-]+$/.test(url)).map(url => (
+                <a key={url} href={url} target="_blank" rel="noopener noreferrer">View attachment</a>
+              ))}
 
               {msg.reactions && msg.reactions.length > 0 && (
                 <div className="reactions">

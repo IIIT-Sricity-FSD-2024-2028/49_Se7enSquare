@@ -8,6 +8,7 @@ import {
   resetEventsFilter,
   selectEvents,
   selectEventsLoading,
+  selectEventsError,
   selectCategoryFilter,
 } from '../../../store/slices/eventsSlice';
 import { selectFilteredEvents } from '../../../store/selectors/eventSelectors';
@@ -15,6 +16,7 @@ import { selectFilteredEvents } from '../../../store/selectors/eventSelectors';
 export function useEvents(initialCategory = 'all') {
   const dispatch = useAppDispatch();
   const events = useAppSelector(selectEvents);
+  const error = useAppSelector(selectEventsError);
   const loading = useAppSelector(selectEventsLoading);
   const selectedCategory = useAppSelector(selectCategoryFilter);
   const upcomingEvents = useAppSelector(selectFilteredEvents);
@@ -51,6 +53,7 @@ export function useEvents(initialCategory = 'all') {
   return {
     events,
     loading,
+    error,
     selectedCategory,
     setSelectedCategory,
     upcomingEvents,

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { API_BASE, apiRequest, toSessionUser } from '../../services/api';
+import { apiRequest, toSessionUser } from '../../services/api';
 import { authService } from '../../services/authService';
 
 /**
@@ -37,7 +37,10 @@ export const loginUser = createAsyncThunk(
 
 export const restoreSession = createAsyncThunk(
   'auth/restoreSession',
-  async () => toSessionUser(await apiRequest('/users/me')),
+  async (_, { rejectWithValue }) => {
+    try { return toSessionUser(await apiRequest('/users/me')); }
+    catch (error) { return rejectWithValue({ status: error.status, message: error.message }); }
+  },
   {
     condition: (_, { getState }) => {
       const auth = getState().auth;
@@ -85,6 +88,8 @@ const initialState = {
   user: null,
   sessionChecked: false,
   sessionLoading: false,
+  sessionError: null,
+  sessionRequestId: null,
   form: initialForm,
   loginLoading: false,
   loginError: null,
@@ -95,6 +100,8 @@ const initialState = {
 // Login and profile updates both replace the session user with the whitelisted fields
 const setSessionUser = {
   reducer(state, action) {
+    state.sessionError = null;
+    state.sessionRequestId = null;
     state.user = action.payload;
     state.sessionChecked = true;
     state.sessionLoading = false;
@@ -106,19 +113,14 @@ const setSessionUser = {
   },
 };
 
-export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { getState, dispatch }) => {
-  const token = getState().auth.user?.accessToken;
-  dispatch(logout());
-
+export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { dispatch }) => {
   try {
-    await fetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-  } catch {
-    // Always complete local logout, including when the backend is unreachable.
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } catch (error) {
+    // An expired session is already signed out. Network failures must remain retryable.
+    if (error.status !== 401) throw error;
   }
+  dispatch(logout());
 });
 
 const authSlice = createSlice({
@@ -143,6 +145,9 @@ const authSlice = createSlice({
       state.sessionLoading = false;
     },
     logout(state) {
+      state.sessionError = null;
+      state.sessionRequestId = null;
+      state.form = initialForm;
       state.user = null;
       state.sessionChecked = true;
       state.sessionLoading = false;
@@ -150,6 +155,10 @@ const authSlice = createSlice({
       state.loginError = null;
       state.regLoading = false;
       state.regError = null;
+    },
+    retrySession(state) {
+      state.sessionChecked = false;
+      state.sessionError = null;
     },
     clearAuthErrors(state) {
       state.loginError = null;
@@ -176,6 +185,8 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loginLoading = false;
         state.loginError = null;
+        state.sessionError = null;
+        state.sessionRequestId = null;
         state.user = action.payload;
         state.sessionChecked = true;
         state.sessionLoading = false;
@@ -197,15 +208,20 @@ const authSlice = createSlice({
         state.regLoading = false;
         state.regError = action.payload || { general: action.error?.message || 'Registration failed' };
       })
-      .addCase(restoreSession.pending, (state) => {
+      .addCase(restoreSession.pending, (state, action) => {
+        state.sessionRequestId = action.meta.requestId;
+        state.sessionError = null;
         state.sessionLoading = true;
       })
       .addCase(restoreSession.fulfilled, (state, action) => {
+        if (state.sessionRequestId !== action.meta.requestId) return;
         state.user = action.payload;
         state.sessionLoading = false;
         state.sessionChecked = true;
       })
-      .addCase(restoreSession.rejected, (state) => {
+      .addCase(restoreSession.rejected, (state, action) => {
+        if (state.sessionRequestId !== action.meta.requestId) return;
+        state.sessionError = action.payload?.status === 401 ? null : (action.payload?.message || 'Unable to restore your session.');
         state.user = null;
         state.sessionLoading = false;
         state.sessionChecked = true;
@@ -220,6 +236,7 @@ export const {
   profileUpdated,
   logout,
   clearAuthErrors,
+  retrySession,
   setAuthLoginError,
   setAuthRegError,
 } = authSlice.actions;

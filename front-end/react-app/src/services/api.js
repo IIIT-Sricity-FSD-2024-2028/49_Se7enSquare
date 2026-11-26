@@ -33,6 +33,7 @@ export function toSessionUser(user) {
   return {
     id: parsedId,
     username: user.username,
+    email: user.email,
     role: user.role || 'user',
     name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
     firstName: user.firstName || '',
@@ -71,14 +72,18 @@ export async function apiRequest(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
+  const timeoutSignal = AbortSignal.timeout(15000);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   let response;
   try {
     response = await fetch(url, {
       ...options,
       credentials: 'include',
+      signal,
       headers,
     });
   } catch (netErr) {
+    if (timeoutSignal.aborted) throw new Error('The server took too long to respond. Please retry.', { cause: netErr });
     if (netErr instanceof TypeError && (netErr.message.includes('fetch') || netErr.message.includes('Network'))) {
       const connErr = new Error(
         'Unable to connect to Se7enSquare server. Please ensure the backend is running.'
@@ -108,6 +113,11 @@ export async function apiRequest(endpoint, options = {}) {
     error.until = data?.until || null;
     error.data = data;
 
+    // Only expire the session that issued this request; a later login must survive.
+    if (response.status === 401 && user && getStoredUser() === user && !endpoint.startsWith('/auth/')) {
+      clearUserSession();
+    }
+
     // Stale role in the session (admin changed it) -> log out, go to /login
     if (response.status === 403) handleRoleMismatch(data);
 
@@ -129,5 +139,8 @@ export async function apiRequest(endpoint, options = {}) {
     throw error;
   }
 
+  if (response.status !== 204 && !contentType.includes('application/json')) {
+    throw new Error('The server returned an unexpected response. Check the API address and retry.');
+  }
   return data;
 }

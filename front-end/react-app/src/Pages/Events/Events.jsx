@@ -42,6 +42,8 @@ export default function Events() {
   const { showToast } = useToast();
   const {
     loading: eventsLoading,
+    error: eventsError,
+    loadEvents,
     selectedCategory,
     setSelectedCategory,
     upcomingEvents,
@@ -91,7 +93,8 @@ export default function Events() {
   const handleCancel = async (regOrEv) => {
     if (!window.confirm(`Cancel registration for "${regOrEv.title || regOrEv.eventTitle || 'this event'}"?`)) return;
     try {
-      await cancelRegistration(regOrEv);
+      const result = await cancelRegistration(regOrEv);
+      if (!result.success) throw new Error(result.error);
       showToast('Registration cancelled.');
     } catch (err) {
       showToast(`⚠️ ${err?.message || 'Could not cancel registration.'}`);
@@ -138,6 +141,10 @@ export default function Events() {
             </div>
           </div>
 
+          {eventsError && <div role="alert">
+            <p>{eventsError}</p>
+            <button type="button" onClick={() => loadEvents()} disabled={eventsLoading}>Retry events</button>
+          </div>}
           <EventsGrid
             events={upcomingEvents}
             loading={eventsLoading}

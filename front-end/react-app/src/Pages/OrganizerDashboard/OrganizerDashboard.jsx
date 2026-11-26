@@ -26,6 +26,8 @@ export default function OrganizerDashboard() {
     organizerProfile,
     earnings,
     loading,
+    error,
+    retry,
     modalOpen,
     setModalOpen,
     modalMode,
@@ -84,6 +86,7 @@ export default function OrganizerDashboard() {
             you created.
           </p>
 
+          {error && <div role="alert"><p>{error}</p><button onClick={retry} disabled={loading}>Retry organizer data</button></div>}
           <PlanCard
             isPremium={isPremium}
             organizerProfile={organizerProfile}

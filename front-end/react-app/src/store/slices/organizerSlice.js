@@ -9,28 +9,27 @@ import { selectEvents } from './eventsSlice';
  * Tournaments themselves live in the events slice; selectMyEvents filters them.
  */
 
-const FREE_PROFILE = { plan: 'free', limits: { maxActiveTournaments: 2, maxParticipants: 64 } };
 
 export const fetchOrganizerData = createAsyncThunk('organizer/fetch', async (_, { getState }) => {
   const userId = getState().auth.user?.id;
 
   // Registration counts per event (non-critical)
-  const regs = await eventService.getRegistrations().catch(() => []);
+  const regs = await eventService.getRegistrations();
   const regCountByEvent = {};
   (Array.isArray(regs) ? regs : []).forEach((r) => {
     regCountByEvent[r.eventId] = (regCountByEvent[r.eventId] || 0) + 1;
   });
 
-  if (!userId) return { regCountByEvent, profile: FREE_PROFILE, earnings: '0' };
+  if (!userId) throw new Error('Please sign in to view organizer data');
 
   const [profile, analytics] = await Promise.all([
-    apiRequest(`/organisers/profile?userId=${userId}`).catch(() => null),
-    apiRequest(`/organisers/analytics?userId=${userId}`).catch(() => null),
+    apiRequest(`/organisers/profile?userId=${userId}`),
+    apiRequest(`/organisers/analytics?userId=${userId}`),
   ]);
 
   return {
     regCountByEvent,
-    profile: profile || FREE_PROFILE,
+    profile,
     earnings: Number(analytics?.estimatedOrganiserEarnings || 0).toLocaleString(),
   };
 });
@@ -100,6 +99,7 @@ const organizerSlice = createSlice({
     builder
       .addCase(fetchOrganizerData.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchOrganizerData.fulfilled, (state, action) => {
         state.loading = false;
@@ -107,9 +107,9 @@ const organizerSlice = createSlice({
         state.earnings = action.payload.earnings;
         state.regCountByEvent = action.payload.regCountByEvent;
       })
-      .addCase(fetchOrganizerData.rejected, (state) => {
+      .addCase(fetchOrganizerData.rejected, (state, action) => {
         state.loading = false;
-        state.profile = FREE_PROFILE;
+        state.error = action.error.message || 'Unable to load organizer data';
       })
       .addCase(upgradeOrganizerPlan.pending, (state) => {
         state.upgrading = true;

@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectProfileCompleteness } from '../../../store/selectors/profileSelectors';
-import { logout } from '../../../store/slices/authSlice';
+import { logoutUser } from '../../../store/slices/authSlice';
 import { selectCurrentPlan, selectPricingLoading } from '../../../store/slices/pricingSlice';
 import {
   fetchProfileSettings,
@@ -300,9 +300,9 @@ export default function useProfileSettings() {
     }
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
+  const handleLogout = async () => {
+    const result = await dispatch(logoutUser());
+    if (logoutUser.fulfilled.match(result)) navigate('/login');
   };
 
   const initials = `${formData.firstName?.[0] || user?.username?.[0] || ''}${formData.lastName?.[0] || ''}`.toUpperCase() || 'U';

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { restoreSession, selectCurrentUser } from './store/slices/authSlice';
+import { restoreSession, retrySession, selectCurrentUser } from './store/slices/authSlice';
 import { useAppDispatch } from './store/hooks';
 
 // Pages
@@ -35,10 +35,17 @@ import GlobalToast from './Components/platform/common/GlobalToast';
 // Reads the user from the Redux store, so logging in or out re-renders it.
 function ProtectedRoute({ children, allowedRoles, allowOwner = false }) {
   const user = useSelector(selectCurrentUser);
-  const { sessionChecked, sessionLoading } = useSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
+  const { sessionChecked, sessionLoading, sessionError } = useSelector((state) => state.auth);
 
   if (!sessionChecked || sessionLoading) {
     return <div className="auth-session-loading" role="status">Checking your session…</div>;
+  }
+
+  if (sessionError) {
+    return <div role="alert"><p>{sessionError}</p><button onClick={() => {
+      dispatch(retrySession()); dispatch(restoreSession());
+    }}>Retry session</button></div>;
   }
 
   if (!user || !user.username || user.id === undefined || user.id === null) {
