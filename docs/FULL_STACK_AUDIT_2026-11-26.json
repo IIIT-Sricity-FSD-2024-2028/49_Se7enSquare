@@ -1,0 +1,167 @@
+{
+  "date": "2026-11-26",
+  "project": "Se7enSquare / GameUnity",
+  "baseline_commit": "fe355ab",
+  "baseline_reproduction": {
+    "login": "Original committed frontend displayed Missing or invalid session for anonymous restoration.",
+    "events": "Original frontend displayed Loading events after two seconds with zero event requests."
+  },
+  "fixes": [
+    {
+      "area": "Authentication",
+      "root_causes": [
+        "Expected anonymous restoration rejection became a global toast",
+        "Late restoration could overwrite a newer login",
+        "Profile logout cleared Redux without revoking the cookie",
+        "Failed logout was treated as successful",
+        "Expired protected requests left stale Redux identity"
+      ],
+      "changes": [
+        "Separate anonymous, network and server restoration outcomes; protected retry UI",
+        "Match restore request IDs",
+        "Use authenticated server logout from both UI locations and retain retry on network failure",
+        "Expire invalid sessions and discard previous-session thunk results"
+      ]
+    },
+    {
+      "area": "Events and organizer",
+      "root_causes": [
+        "Initial loading flag prevented first fetch",
+        "Event service bypassed shared cookie-enabled API client",
+        "Modal selector allocated on each call",
+        "Tournament form submitted UI-only fields rejected by backend",
+        "Delete/cancel handlers reported success after rejected operations",
+        "Organizer fetches fabricated fallback state after failures"
+      ],
+      "changes": [
+        "Correct fetch lifecycle and empty-list caching",
+        "Shared request credentials, timeout, meaningful errors and retry controls",
+        "Memoized modal selector",
+        "Whitelist actual tournament DTO fields",
+        "Confirm thunk success and synchronize backend responses",
+        "Display real organizer failures"
+      ]
+    },
+    {
+      "area": "Backend authorization and persistence",
+      "root_causes": [
+        "Registration create/delete trusted caller identity",
+        "Organizer event updates were not scoped to ownership",
+        "Feature gates trusted body IDs",
+        "Event deletion left registrations and promotions behind"
+      ],
+      "changes": [
+        "Bind registration and tournament identities to the authenticated session",
+        "Enforce ownership and organizer limits for creation and updates",
+        "Reject registration for unapproved or suspended-community events",
+        "Cascade related event records on deletion"
+      ]
+    },
+    {
+      "area": "Google authentication",
+      "root_causes": [
+        "ID-token fallback did not enforce the configured audience",
+        "Existing suspended or banned Google accounts could receive sessions"
+      ],
+      "changes": [
+        "Require configured client and successful official verifier",
+        "Apply account-status checks before creating a Google session"
+      ],
+      "verification": "Code review and compilation; live provider login not performed"
+    },
+    {
+      "area": "Chat",
+      "root_causes": [
+        "communityId URL parameter was ignored",
+        "Already-decoded query values were decoded twice",
+        "Attachment and Quick Action buttons had no handlers"
+      ],
+      "changes": [
+        "Support both existing community URL parameters",
+        "Avoid duplicate URI decoding",
+        "Upload through backend and persist attachment URLs with messages in Redux",
+        "Wire Quick Action to search and pinned-message controls"
+      ]
+    }
+  ],
+  "modified_files": [
+    "back-end/package.json",
+    "back-end/src/common/guards/auth-context.guard.ts",
+    "back-end/src/common/middleware/feature-gating.middleware.ts",
+    "back-end/src/modules/auth/auth.service.ts",
+    "back-end/src/modules/event-registrations/event-registrations.controller.ts",
+    "back-end/src/modules/event-registrations/event-registrations.service.ts",
+    "back-end/src/modules/events/events.controller.ts",
+    "back-end/src/modules/events/events.module.ts",
+    "back-end/src/modules/events/events.service.ts",
+    "back-end/test/admin.e2e.cjs",
+    "back-end/test/full-stack.e2e.cjs",
+    "back-end/test/profile.integration.cjs",
+    "front-end/react-app/src/App.jsx",
+    "front-end/react-app/src/Components/SideBar.jsx",
+    "front-end/react-app/src/Components/event-management/hooks/useEvents.js",
+    "front-end/react-app/src/Components/event-management/services/eventService.js",
+    "front-end/react-app/src/Components/platform/hooks/useChat.js",
+    "front-end/react-app/src/Components/platform/hooks/useProfileSettings.js",
+    "front-end/react-app/src/Pages/Chat.jsx",
+    "front-end/react-app/src/Pages/Chat/components/MessageFeed.jsx",
+    "front-end/react-app/src/Pages/Chat/components/MessageInput.jsx",
+    "front-end/react-app/src/Pages/EventApproval/EventApproval.jsx",
+    "front-end/react-app/src/Pages/Events/Events.jsx",
+    "front-end/react-app/src/Pages/Events/RegistrationModal.jsx",
+    "front-end/react-app/src/Pages/OrganizerDashboard/OrganizerDashboard.jsx",
+    "front-end/react-app/src/Pages/OrganizerDashboard/useOrganizerData.js",
+    "front-end/react-app/src/services/api.js",
+    "front-end/react-app/src/store/index.js",
+    "front-end/react-app/src/store/listenerMiddleware.js",
+    "front-end/react-app/src/store/sessionMiddleware.js",
+    "front-end/react-app/src/store/slices/authSlice.js",
+    "front-end/react-app/src/store/slices/chatSlice.js",
+    "front-end/react-app/src/store/slices/eventsSlice.js",
+    "front-end/react-app/src/store/slices/organizerSlice.js"
+  ],
+  "local_configuration": {
+    "frontend_env": "Changed only VITE_API_URL to /api in ignored local .env; credentials were not committed.",
+    "frontend": "http://127.0.0.1:5173",
+    "backend": "http://localhost:3000"
+  },
+  "verification": {
+    "backend_build": "passed",
+    "frontend_build": "passed; existing large-chunk warning remains",
+    "backend_lint": "passed",
+    "frontend_lint": "passed",
+    "backend_integration": "128 HTTP checks passed",
+    "existing_browser_regression": "passed",
+    "expanded_browser_audit": "passed: 144 checks, 20 routes x 6 roles (120 role/page visits), including tournament CRUD and registration/cancellation, community create/update/delete, chat and attachment persistence, retry, logout, and authorization",
+    "live_development_setup": "Login, Events and logout passed without browser runtime errors",
+    "test_data": "Isolated temporary JSON database; actual API operations and persistence, no fake successful API responses",
+    "runtime": "Node v26.12.1; repository .nvmrc specifies 22.23.5",
+    "continuation_run": {
+      "date": "2026-11-26",
+      "backend_lint": "passed",
+      "frontend_lint": "passed",
+      "backend_build": "passed",
+      "frontend_build": "passed; Vite reports an existing large-chunk advisory",
+      "backend_integration": "passed: 128 HTTP checks",
+      "admin_browser_smoke": "passed",
+      "expanded_browser_audit": "passed: 144 checks and 120 role/page visits",
+      "git_diff_check": "passed",
+      "live_google_oauth": "not performed; requires an interactive Google account and configured provider credentials"
+    }
+  },
+  "coverage": [
+    "20 main routes under all six canonical roles",
+    "Tournament create/edit and approval modal/buttons",
+    "Event registration/cancellation, authorization and cascade deletion",
+    "Session restoration race, reload, logout and offline retry",
+    "Community creation wizard and API update/delete",
+    "Admin tabs",
+    "Chat sending, file upload, quick actions and reload persistence"
+  ],
+  "limitations": [
+    "Live Google OAuth requires interactive provider authentication and was not verified.",
+    "The browser suite covers the listed workflows and route matrix; it is not exhaustive verification of every control and all combinations.",
+    "Validation ran on the available Node 26 runtime, not the pinned Node 22 runtime.",
+    "Backend sessions remain process-local under the existing architecture; restarting the backend requires signing in again."
+  ]
+}

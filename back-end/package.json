@@ -15,7 +15,8 @@
     "seed": "ts-node src/seed.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "test:integration": "npm run build && node test/profile.integration.cjs",
-    "test:e2e": "npm run build && npm --prefix ../front-end/react-app run build && node test/admin.e2e.cjs"
+    "test:e2e": "npm run build && VITE_API_URL=/api npm --prefix ../front-end/react-app run build && node test/admin.e2e.cjs",
+    "test:audit": "npm run build && VITE_API_URL=/api npm --prefix ../front-end/react-app run build && node test/full-stack.e2e.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.8",
