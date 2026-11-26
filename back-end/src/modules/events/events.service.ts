@@ -1,10 +1,20 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { db, EventRecord, nextId, saveDb } from '../../common/utils/in-memory-db';
+import { OrganisersService } from '../organisers/organisers.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class EventsService {
+  constructor(private readonly organisers: OrganisersService) {}
+
+  private assertLimits(organiserId: number | undefined, maxAttendees?: number, ignoreId?: number) {
+    if (!organiserId || db.users.find(u => u.id === organiserId)?.role !== 'organizer') return;
+    const limits = this.organisers.limitsFor(organiserId);
+    const active = db.events.filter(e => e.id !== ignoreId && e.organiserId === organiserId && !['cancelled', 'rejected'].includes(e.status || 'pending')).length;
+    if (limits.maxActiveTournaments !== null && active >= limits.maxActiveTournaments) throw new ForbiddenException('Your organizer plan has reached its active tournament limit');
+    if (limits.maxParticipants !== null && maxAttendees && maxAttendees > limits.maxParticipants) throw new ForbiddenException('Your organizer plan does not allow this participant capacity');
+  }
   findAll(status?: string, includeSuspended = false): EventRecord[] {
     const suspendedCommIds = new Set(
       db.communities.filter((c) => c.status === 'suspended').map((c) => c.id),
@@ -34,6 +44,7 @@ export class EventsService {
     }
 
     const status = payload.status || 'pending';
+    if (!['cancelled', 'rejected'].includes(status)) this.assertLimits(payload.organiserId, payload.maxAttendees);
     if (status === 'approved') {
       this.assertNoEventClash(payload.communityId, payload.date, payload.time);
     }
@@ -64,6 +75,8 @@ export class EventsService {
     const nextTime = payload.time ?? event.time;
     const nextStatus = payload.status || event.status;
 
+    if (!['cancelled', 'rejected'].includes(nextStatus || 'pending')) this.assertLimits(event.organiserId, payload.maxAttendees ?? event.maxAttendees, id);
+
     if (nextStatus === 'approved') {
       this.assertNoEventClash(nextCommunityId, nextDate, nextTime, id);
     }
@@ -90,6 +103,8 @@ export class EventsService {
   remove(id: number): { message: string } {
     this.findOne(id);
     db.events = db.events.filter((item) => item.id !== id);
+    db.eventRegistrations = db.eventRegistrations.filter((item) => item.eventId !== id);
+    db.featuredEvents = db.featuredEvents.filter((item) => item.eventId !== id);
     saveDb();
     return { message: `Event ${id} deleted` };
   }

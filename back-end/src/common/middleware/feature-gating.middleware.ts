@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { getAuthSession, readSessionCookie } from '../utils/auth-sessions';
 import { db } from '../utils/in-memory-db';
 import { OrganisersService } from '../../modules/organisers/organisers.service';
 import { SubscriptionsService } from '../../modules/subscriptions/subscriptions.service';
@@ -7,14 +8,17 @@ import { FileLoggerService } from '../logger/file-logger.service';
 
 const FREE_COMMUNITY_LIMIT = 4;
 
-/**
- * Router-level middleware scoped to POST /api/communities (doc §8/§20 — User
- * Subscription feature gating). Free-plan users are capped at 4 communities;
- * Plus/Ultra Pro are not gated here (Plus's own 10-community cap is a soft
- * product limit, not enforced server-side in this pass — only the free
- * ceiling is a hard block, matching how CreateCommunityDto.ownerId already
- * carries client-supplied identity in this trust model).
- */
+// Middleware runs before guards: resolve the same opaque session token, never body identity.
+function sessionUser(req: Request) {
+  const authorization = req.headers.authorization || '';
+  const token = /^Bearer\s+/i.test(authorization)
+    ? authorization.replace(/^Bearer\s+/i, '').trim()
+    : readSessionCookie(req.headers.cookie);
+  const id = token ? getAuthSession(token) : null;
+  return id === null ? undefined : db.users.find(user => user.id === id);
+}
+
+/** Enforce community limits for the authenticated creator. */
 @Injectable()
 export class SubscriptionLimitMiddleware implements NestMiddleware {
   constructor(
@@ -23,9 +27,9 @@ export class SubscriptionLimitMiddleware implements NestMiddleware {
   ) {}
 
   use(req: Request, res: Response, next: NextFunction) {
-    const ownerId = Number(req.body?.ownerId);
+    const ownerId = sessionUser(req)?.id;
     if (!ownerId) {
-      return next(); // no owner asserted — let the controller's own validation reject it
+      return next(); // The authentication guard rejects missing/expired sessions.
     }
 
     const { plan } = this.subscriptionsService.status(ownerId);
@@ -45,9 +49,8 @@ export class SubscriptionLimitMiddleware implements NestMiddleware {
 
 /**
  * Router-level middleware scoped to POST /api/events (doc §9/§20 — Organizer
- * Subscription feature gating). Only applies when the payload carries an
- * organiserId (i.e. this is an organizer-hosted tournament, not a regular
- * community event) — Free Organizer is capped at 1 active tournament and
+ * Subscription feature gating). Applies to the authenticated organizer.
+ * Free Organizer is capped at 1 active tournament and
  * 100 participants; Premium is unlimited.
  */
 @Injectable()
@@ -58,10 +61,9 @@ export class OrganizerLimitMiddleware implements NestMiddleware {
   ) {}
 
   use(req: Request, res: Response, next: NextFunction) {
-    const organiserId = Number(req.body?.organiserId);
-    if (!organiserId) {
-      return next(); // not an organizer-hosted tournament — nothing to gate
-    }
+    const user = sessionUser(req);
+    if (!user || user.role !== 'organizer') return next();
+    const organiserId = user.id;
 
     const { maxActiveTournaments, maxParticipants } = this.organisersService.limitsFor(organiserId);
 

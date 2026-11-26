@@ -107,7 +107,7 @@ export class AuthContextGuard implements CanActivate {
     // Account status check (suspended or banned)
     if (user.status === 'suspended' || user.status === 'banned') {
       const method = (request.method || 'GET').toUpperCase();
-      const isRestrictedRouteAllowed =
+      const isRestrictedRouteAllowed = cleanUrl.endsWith('/auth/logout') ||
         (method === 'GET' &&
           (cleanUrl.endsWith('/users/me') ||
             cleanUrl.endsWith('/sanctions/mine') ||

@@ -6,7 +6,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 
 const root = path.resolve(__dirname, '..');
-const base = 'http://127.0.0.1:3100';
+const base = `http://127.0.0.1:${process.env.TEST_PORT || 3100}`;
 
 async function waitForServer(child) {
   const deadline = Date.now() + 20000;

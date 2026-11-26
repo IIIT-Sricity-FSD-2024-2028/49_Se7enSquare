@@ -28,6 +28,8 @@ export class EventRegistrationsService {
   }): EventRegistrationRecord {
     const event = db.events.find((item) => item.id === payload.eventId);
     if (!event) throw new BadRequestException('eventId must reference an existing event');
+    if (event.status && event.status !== 'approved') throw new BadRequestException('Only approved events accept registrations');
+    if (db.communities.find(c => c.id === event.communityId)?.status === 'suspended') throw new BadRequestException('This community is suspended');
     if (!db.users.some((item) => item.id === payload.userId)) {
       throw new BadRequestException('userId must reference an existing user');
     }

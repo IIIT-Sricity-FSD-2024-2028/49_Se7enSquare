@@ -22,6 +22,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { UserRecord } from '../../common/utils/in-memory-db';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../rbac/role.enum';
@@ -108,7 +109,8 @@ export class EventsController {
   @ApiOkResponse({ description: 'Event title plus an array of registrants' })
   @ApiNotFoundResponse({ description: 'Event not found' })
   @ApiForbiddenResponse({ description: 'Only community_manager, organizer, or admin can view registrants' })
-  getRegistrants(@Param('id', ParseIntPipe) id: number) {
+  getRegistrants(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: UserRecord) {
+    this.assertOrganizerOwnership(id, user);
     return this.eventsService.getRegistrants(id);
   }
 
@@ -122,8 +124,10 @@ export class EventsController {
   @ApiBody({ type: CreateEventDto, description: 'Event creation payload' })
   @ApiCreatedResponse({ type: EventDto, description: 'The newly created event' })
   @ApiForbiddenResponse({ description: 'Missing or invalid x-role header' })
-  create(@Body() payload: CreateEventDto, @CurrentUser('role') role: string) {
-    assertCanSetStatus(role, payload.status);
+  create(@Body() payload: CreateEventDto, @CurrentUser() user: UserRecord) {
+    assertCanSetStatus(user.role, payload.status);
+    payload.organiserId = user.id;
+    payload.createdBy = user.username;
     return this.eventsService.create(payload);
   }
 
@@ -141,10 +145,23 @@ export class EventsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateEventDto,
-    @CurrentUser('role') role: string,
+    @CurrentUser() user: UserRecord,
   ) {
-    assertCanSetStatus(role, payload.status);
+    this.assertOrganizerOwnership(id, user);
+    assertCanSetStatus(user.role, payload.status);
+    if (user.role === AppRole.ORGANIZER) {
+      if (payload.status && !['pending', 'cancelled'].includes(payload.status)) throw new ForbiddenException('Organizers may only request or cancel events');
+      payload.organiserId = user.id;
+      payload.createdBy = user.username;
+    }
     return this.eventsService.update(id, payload);
+  }
+
+  private assertOrganizerOwnership(id: number, user: UserRecord) {
+    const event = this.eventsService.findOne(id);
+    if (user.role === AppRole.ORGANIZER && event.organiserId !== user.id) {
+      throw new ForbiddenException('You may only manage your own tournaments');
+    }
   }
 
   @Delete(':id')

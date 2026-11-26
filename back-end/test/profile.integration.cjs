@@ -37,7 +37,7 @@ async function run() {
   const serve = process.argv.includes('--serve');
   if (serve) {
     const express = require('express');
-    const dist = path.resolve(root, '../front-end/react-app/dist');
+    const dist = process.env.FRONTEND_DIST || path.resolve(root, '../front-end/react-app/dist');
     app.use(express.static(dist));
     app.use((req, res, next) => {
       if (req.method === 'GET' && req.path === '/') return res.sendFile(path.join(dist, 'index.html'));
@@ -56,7 +56,7 @@ async function run() {
       });
     }
   }
-  await app.listen(serve ? 3100 : 0, '127.0.0.1');
+  await app.listen(serve ? Number(process.env.TEST_PORT || 3100) : 0, '127.0.0.1');
   const base = await app.getUrl();
   let checks = 0;
   let lastSetCookie = null;
@@ -215,7 +215,7 @@ async function run() {
     await request('/auth/logout', 0, 'POST');
     await request('/users/me', 0, 'GET', undefined, 401);
     console.log(`Profile integration: ${checks} HTTP checks passed (users, moderator, admin, owner, organizer, community manager, Google-only).`);
-    if (serve) { console.log(`UI test server: ${base}; owner login profile_4 / Testpass123`); return; }
+    if (serve) { console.log(`UI test database: ${temp}`); console.log(`UI test server: ${base}; owner login profile_4 / Testpass123`); return; }
   } finally {
     if (!serve) await app.close();
   }

@@ -133,6 +133,7 @@ export class AuthService {
       throw new BadRequestException('Either Google credential (ID token) or accessToken is required');
     }
 
+    if (!process.env.GOOGLE_CLIENT_ID) throw new BadRequestException('Google sign-in is not configured');
     let googleProfile: VerifiedGoogleProfile;
 
     if (payload.credential) {
@@ -155,31 +156,8 @@ export class AuthService {
           picture: p.picture,
         };
       } catch (err: unknown) {
-        // Fallback to Google tokeninfo endpoint
-        try {
-          const tokenInfoRes = await fetch(
-            `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(payload.credential)}`,
-          );
-          if (!tokenInfoRes.ok) {
-            throw new Error(`Google tokeninfo endpoint returned ${tokenInfoRes.status}`);
-          }
-          const p = (await tokenInfoRes.json()) as Record<string, unknown>;
-          if (!p.email || !p.sub) {
-            throw new Error('Google tokeninfo missing email or sub');
-          }
-          googleProfile = {
-            sub: String(p.sub),
-            email: String(p.email),
-            email_verified: p.email_verified === 'true' || p.email_verified === true,
-            given_name: typeof p.given_name === 'string' ? p.given_name : undefined,
-            family_name: typeof p.family_name === 'string' ? p.family_name : undefined,
-            name: typeof p.name === 'string' ? p.name : undefined,
-            picture: typeof p.picture === 'string' ? p.picture : undefined,
-          };
-        } catch {
-          const msg = err instanceof Error ? err.message : 'Token verification failed';
-          throw new UnauthorizedException(`Google token verification failed: ${msg}`);
-        }
+        const msg = err instanceof Error ? err.message : 'Token verification failed';
+        throw new UnauthorizedException(`Google token verification failed: ${msg}`);
       }
     } else {
       // payload.accessToken
@@ -223,6 +201,13 @@ export class AuthService {
     );
 
     if (existingUser) {
+      if (existingUser.status === 'suspended' || existingUser.status === 'banned') {
+        throw new ForbiddenException({
+          code: existingUser.status === 'banned' ? 'ACCOUNT_BANNED' : 'ACCOUNT_SUSPENDED',
+          message: `Account is ${existingUser.status}`,
+          reason: existingUser.statusReason || `Your account has been ${existingUser.status}.`,
+        });
+      }
       if (!existingUser.googleId) {
         existingUser.googleId = googleId;
       }
